@@ -10,6 +10,7 @@ type GameEntry = {
   version?: string;
   path: string;
   pathValid: boolean;
+  coverPath?: string | null;
 };
 
 defineProps<{
@@ -35,8 +36,8 @@ const emit = defineEmits<{
     <div class="grid grid-cols-1 gap-3">
       <GameCard v-for="g in games" :key="g.id" :title="g.title"
         :subtitle="`${g.version ?? ''} ${engineLabel(g.engineType)}`" :selected="selectedGameId === g.id"
-        :path-valid="g.pathValid" @select="emit('select', g.id)" @start="emit('start', g.id)"
-        @settings="emit('settings', g.id)" />
+        :path-valid="g.pathValid" :cover-path="g.coverPath ?? null" @select="emit('select', g.id)"
+        @start="emit('start', g.id)" @settings="emit('settings', g.id)" />
     </div>
   </section>
 </template>

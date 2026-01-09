@@ -34,6 +34,7 @@ struct GameEntryDto {
     path: String,
     path_valid: bool,
     runtime_version: Option<String>,
+    cover_path: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +61,8 @@ struct GameToml {
     args: Vec<String>,
     #[serde(default = "default_true")]
     sandbox_home: bool,
+    #[serde(default)]
+    cover_file: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -133,6 +136,187 @@ fn game_user_data_dir(container_root: &Path, game_id: &str) -> PathBuf {
 
 fn game_toml_path(container_root: &Path, game_id: &str) -> PathBuf {
     game_profile_dir(container_root, game_id).join("settings.toml")
+}
+
+fn pick_icon_dirs(game_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+
+    // 1) game 根目录下的 icon/icons
+    for name in ["icon", "icons"] {
+        let p = game_dir.join(name);
+        if p.is_dir() {
+            dirs.push(p);
+        }
+    }
+
+    // 2) 兼容：www/icon 或 www/icons
+    let www = game_dir.join("www");
+    if www.is_dir() {
+        for name in ["icon", "icons"] {
+            let p = www.join(name);
+            if p.is_dir() {
+                dirs.push(p);
+            }
+        }
+    }
+
+    // 3) 同时也扫一遍根目录，兼容大小写（Icon/ICONS）
+    if let Ok(entries) = std::fs::read_dir(game_dir) {
+        for e in entries.flatten() {
+            let Ok(ty) = e.file_type() else {
+                continue;
+            };
+            if !ty.is_dir() {
+                continue;
+            }
+            let p = e.path();
+            let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let lower = name.to_ascii_lowercase();
+            if lower == "icon" || lower == "icons" {
+                if !dirs.iter().any(|d| d == &p) {
+                    dirs.push(p);
+                }
+            }
+        }
+    }
+
+    dirs
+}
+
+fn is_supported_image_ext(ext: &str) -> bool {
+    matches!(ext, "png" | "jpg" | "jpeg" | "webp")
+}
+
+fn score_cover_candidate(path: &Path) -> u64 {
+    let mut score: u64 = 0;
+    let name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if name.contains("cover") {
+        score += 300;
+    }
+    if name.contains("poster") {
+        score += 200;
+    }
+    if name.contains("banner") {
+        score += 180;
+    }
+    if name.contains("title") {
+        score += 120;
+    }
+    if name.contains("icon") {
+        score += 80;
+    }
+
+    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+        match ext.to_ascii_lowercase().as_str() {
+            "png" => score += 30,
+            "webp" => score += 25,
+            "jpg" | "jpeg" => score += 20,
+            _ => {}
+        }
+    }
+
+    if let Ok(meta) = std::fs::metadata(path) {
+        if meta.is_file() {
+            // 文件越大越可能是封面图；上限避免极端值影响
+            score += (meta.len() / 1024).min(1024);
+        }
+    }
+
+    score
+}
+
+fn find_cover_candidate_from_icons(game_dir: &Path) -> Option<PathBuf> {
+    let icon_dirs = pick_icon_dirs(game_dir);
+    if icon_dirs.is_empty() {
+        return None;
+    }
+
+    let mut best: Option<(u64, PathBuf)> = None;
+    for dir in icon_dirs {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            let Ok(ty) = e.file_type() else {
+                continue;
+            };
+            if !ty.is_file() {
+                continue;
+            }
+            let Some(ext) = p.extension().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !is_supported_image_ext(&ext.to_ascii_lowercase()) {
+                continue;
+            }
+
+            let score = score_cover_candidate(&p);
+            match &best {
+                None => best = Some((score, p)),
+                Some((best_score, _)) if score > *best_score => best = Some((score, p)),
+                _ => {}
+            }
+        }
+    }
+
+    best.map(|(_, p)| p)
+}
+
+fn write_cover_file(
+    container_root: &Path,
+    game_id: &str,
+    src_path: &Path,
+) -> Result<String, String> {
+    let profile_dir = game_profile_dir(container_root, game_id);
+    ensure_dir(&profile_dir)?;
+
+    let ext = src_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .ok_or_else(|| "cover source has no extension".to_string())?;
+    if !is_supported_image_ext(&ext) {
+        return Err(format!("unsupported cover extension: {ext}"));
+    }
+
+    let cover_file = format!("cover.{ext}");
+    let dest = profile_dir.join(&cover_file);
+    std::fs::copy(src_path, &dest)
+        .map_err(|e| format!("failed to copy cover to {}: {e}", dest.display()))?;
+    Ok(cover_file)
+}
+
+fn resolve_cover_path(container_root: &Path, game_id: &str) -> Option<PathBuf> {
+    let toml_path = game_toml_path(container_root, game_id);
+    if toml_path.exists() {
+        if let Ok(cfg) = read_game_toml(&toml_path) {
+            if let Some(file) = cfg.cover_file {
+                let p = game_profile_dir(container_root, game_id).join(file);
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+
+    // 兼容：如果用户手动放了 cover.* 但没写入 settings.toml
+    let profile_dir = game_profile_dir(container_root, game_id);
+    for ext in ["png", "webp", "jpg", "jpeg"] {
+        let p = profile_dir.join(format!("cover.{ext}"));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    None
 }
 
 fn write_game_toml(path: &Path, config: &GameToml) -> Result<(), String> {
@@ -222,8 +406,16 @@ async fn find_game_by_path(pool: &SqlitePool, path: &str) -> Result<Option<GameE
             path_valid: Path::new(&path).exists(),
             path,
             runtime_version,
+            cover_path: None,
         },
     ))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetGameCoverInput {
+    game_id: String,
+    source_path: String,
 }
 
 fn detect_rpg_maker_engine(game_dir: &Path) -> Result<Option<String>, String> {
@@ -343,14 +535,25 @@ async fn import_game_dir_internal(
     let container_root = resolve_container_root(app, pool).await?;
     ensure_dir(&container_root)?;
     let toml_path = game_toml_path(&container_root, &id);
-    let config = GameToml {
+    let mut config = GameToml {
         engine_type: engine_type.clone(),
         entry_path: "www/index.html".to_string(),
         runtime_version: None,
         args: vec![],
         sandbox_home: true,
+        cover_file: None,
     };
+
+    // 中文说明：导入时尝试从 icon/ 或 icons/ 目录里找一张图片当封面，并拷贝进容器目录。
+    if let Some(src) = find_cover_candidate_from_icons(&game_dir) {
+        if let Ok(cover_file) = write_cover_file(&container_root, &id, &src) {
+            config.cover_file = Some(cover_file);
+        }
+    }
     write_game_toml(&toml_path, &config)?;
+
+    let cover_path =
+        resolve_cover_path(&container_root, &id).map(|p| p.to_string_lossy().to_string());
 
     Ok(GameEntryDto {
         id,
@@ -359,6 +562,7 @@ async fn import_game_dir_internal(
         path: trimmed.to_string(),
         path_valid: true,
         runtime_version: None,
+        cover_path,
     })
 }
 
@@ -420,6 +624,7 @@ async fn get_game_launch_config(
             runtime_version: None,
             args: vec![],
             sandbox_home: true,
+            cover_file: None,
         }
     };
 
@@ -448,6 +653,7 @@ async fn update_game_launch_config(
             runtime_version: None,
             args: vec![],
             sandbox_home: true,
+            cover_file: None,
         }
     };
 
@@ -465,6 +671,72 @@ async fn update_game_launch_config(
         let user_data_dir = game_user_data_dir(&container_root, &input.game_id);
         ensure_dir(&user_data_dir)?;
         ensure_user_data_arg(&mut cfg.args, &user_data_dir);
+    }
+
+    write_game_toml(&toml_path, &cfg)
+}
+
+#[tauri::command]
+async fn set_game_cover(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    input: SetGameCoverInput,
+) -> Result<(), String> {
+    let container_root = resolve_container_root(&app, &state.pool).await?;
+    ensure_dir(&container_root)?;
+    let toml_path = game_toml_path(&container_root, &input.game_id);
+
+    let mut cfg = if toml_path.exists() {
+        read_game_toml(&toml_path)?
+    } else {
+        GameToml {
+            engine_type: "unknown".to_string(),
+            entry_path: "www/index.html".to_string(),
+            runtime_version: None,
+            args: vec![],
+            sandbox_home: true,
+            cover_file: None,
+        }
+    };
+
+    let src = PathBuf::from(input.source_path);
+    if !src.is_file() {
+        return Err(format!("cover source not found: {}", src.display()));
+    }
+
+    let cover_file = write_cover_file(&container_root, &input.game_id, &src)?;
+    cfg.cover_file = Some(cover_file);
+    write_game_toml(&toml_path, &cfg)
+}
+
+#[tauri::command]
+async fn clear_game_cover(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    game_id: String,
+) -> Result<(), String> {
+    let container_root = resolve_container_root(&app, &state.pool).await?;
+    ensure_dir(&container_root)?;
+    let toml_path = game_toml_path(&container_root, &game_id);
+
+    let mut cfg = if toml_path.exists() {
+        read_game_toml(&toml_path)?
+    } else {
+        GameToml {
+            engine_type: "unknown".to_string(),
+            entry_path: "www/index.html".to_string(),
+            runtime_version: None,
+            args: vec![],
+            sandbox_home: true,
+            cover_file: None,
+        }
+    };
+
+    if let Some(file) = cfg.cover_file.take() {
+        let p = game_profile_dir(&container_root, &game_id).join(file);
+        if p.exists() {
+            let _ = std::fs::remove_file(&p);
+        }
     }
 
     write_game_toml(&toml_path, &cfg)
@@ -727,7 +999,10 @@ async fn set_container_root(
 }
 
 #[tauri::command]
-async fn list_games(state: tauri::State<'_, AppState>) -> Result<Vec<GameEntryDto>, String> {
+async fn list_games(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<Vec<GameEntryDto>, String> {
     let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
         "SELECT id, title, engine_type, path, runtime_version FROM games ORDER BY title COLLATE NOCASE",
     )
@@ -735,10 +1010,18 @@ async fn list_games(state: tauri::State<'_, AppState>) -> Result<Vec<GameEntryDt
     .await
     .map_err(|e| format!("db error: {e}"))?;
 
+    // 为了在列表里显示封面：读取每个 gameId 对应的容器 settings.toml / cover.*。
+    // 这里按行同步读取（文件很小）；后续如有性能压力可改成缓存或批量策略。
+    let container_root = resolve_container_root(&app, &state.pool).await.ok();
+
     Ok(rows
         .into_iter()
         .map(|(id, title, engine_type, path, runtime_version)| {
             let path_valid = Path::new(&path).exists();
+            let cover_path = container_root
+                .as_ref()
+                .and_then(|root| resolve_cover_path(root, &id))
+                .map(|p| p.to_string_lossy().to_string());
             GameEntryDto {
                 id,
                 title,
@@ -746,6 +1029,7 @@ async fn list_games(state: tauri::State<'_, AppState>) -> Result<Vec<GameEntryDt
                 path,
                 path_valid,
                 runtime_version,
+                cover_path,
             }
         })
         .collect())
@@ -795,8 +1079,12 @@ async fn add_game(
         runtime_version: input.runtime_version.clone(),
         args: vec![],
         sandbox_home: true,
+        cover_file: None,
     };
     write_game_toml(&toml_path, &config)?;
+
+    let cover_path =
+        resolve_cover_path(&container_root, &id).map(|p| p.to_string_lossy().to_string());
 
     Ok(GameEntryDto {
         id,
@@ -805,6 +1093,7 @@ async fn add_game(
         path: input.path.clone(),
         path_valid: Path::new(&input.path).exists(),
         runtime_version: input.runtime_version,
+        cover_path,
     })
 }
 
@@ -846,6 +1135,7 @@ async fn launch_game(
             runtime_version: None,
             args: vec![],
             sandbox_home: true,
+            cover_file: None,
         }
     };
 
@@ -994,6 +1284,8 @@ pub fn run() {
             get_game_container_info,
             get_game_launch_config,
             update_game_launch_config,
+            set_game_cover,
+            clear_game_cover,
             cleanup_unused_containers,
             launch_game,
             get_nwjs_stable_info,
