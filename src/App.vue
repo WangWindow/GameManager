@@ -16,6 +16,7 @@ type GameEntry = {
   version?: string;
   path: string;
   pathValid: boolean;
+  coverPath?: string | null;
 };
 
 const games = ref<GameEntry[]>([]);
@@ -66,6 +67,7 @@ async function refreshGames(selectId?: string) {
       engineType: string;
       path: string;
       pathValid: boolean;
+      coverPath?: string | null;
       runtimeVersion?: string | null;
     }>
   >("list_games");
@@ -77,6 +79,7 @@ async function refreshGames(selectId?: string) {
     engineType: (g.engineType as EngineType) ?? "unknown",
     path: g.path,
     pathValid: g.pathValid,
+    coverPath: g.coverPath ?? null,
   }));
 
   selectedGameId.value = selectId ?? games.value[0]?.id ?? "";
@@ -292,6 +295,7 @@ function engineLabel(engineType: EngineType) {
     <GameSettingsModal v-model:open="gameSettingsOpen" :game="gameSettingsGame" :engine-label="engineLabel"
       @openPath="openPath"
       @deleted="async (id) => { await refreshGames(); if (selectedGameId === id) selectedGameId = games[0]?.id ?? ''; }"
-      @titleUpdated="async (id) => { await refreshGames(id); selectedGameId = id; }" />
+      @titleUpdated="async (id) => { await refreshGames(id); selectedGameId = id; }"
+      @changed="async (id: string) => { await refreshGames(id); selectedGameId = id; }" />
   </div>
 </template>

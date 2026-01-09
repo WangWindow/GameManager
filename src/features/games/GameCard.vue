@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 import Button from "../../components/ui/button/Button.vue";
 import Card from "../../components/ui/card/Card.vue";
@@ -10,7 +11,17 @@ defineProps<{
   subtitle: string;
   selected: boolean;
   pathValid: boolean;
+  coverPath?: string | null;
 }>();
+
+function coverSrc(path: string | null | undefined): string | null {
+  if (!path) return null;
+  try {
+    return convertFileSrc(path);
+  } catch {
+    return null;
+  }
+}
 
 const emit = defineEmits<{
   (e: "select"): void;
@@ -24,7 +35,9 @@ const emit = defineEmits<{
     :class="cn('flex items-center gap-3 p-3 transition', selected && 'ring-2 ring-zinc-900/10 dark:ring-zinc-50/10')">
     <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="emit('select')">
       <div
-        class="size-14 shrink-0 overflow-hidden rounded-lg bg-linear-to-br from-zinc-200 to-zinc-100 dark:from-zinc-800 dark:to-zinc-900" />
+        class="size-14 shrink-0 overflow-hidden rounded-lg bg-linear-to-br from-zinc-200 to-zinc-100 dark:from-zinc-800 dark:to-zinc-900">
+        <img v-if="coverSrc(coverPath)" :src="coverSrc(coverPath)!" alt="" class="h-full w-full object-cover" />
+      </div>
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
           <div class="truncate text-sm font-semibold">{{ title }}</div>

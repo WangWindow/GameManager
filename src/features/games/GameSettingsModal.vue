@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { Icon } from "@iconify/vue";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 import Button from "../../components/ui/button/Button.vue";
 import Card from "../../components/ui/card/Card.vue";
@@ -14,6 +15,7 @@ type GameEntry = {
   engineType: EngineType;
   path: string;
   pathValid: boolean;
+  coverPath?: string | null;
 };
 
 const props = defineProps<{
@@ -26,6 +28,7 @@ const emit = defineEmits<{
   (e: "update:open", v: boolean): void;
   (e: "deleted", gameId: string): void;
   (e: "titleUpdated", gameId: string): void;
+  (e: "changed", gameId: string): void;
   (e: "openPath", path: string): void;
 }>();
 
@@ -35,6 +38,16 @@ const launchArgsText = ref("");
 const sandboxHome = ref(true);
 
 const canSaveTitle = computed(() => titleDraft.value.trim().length > 0);
+
+const coverSrc = computed(() => {
+  const p = props.game?.coverPath ?? null;
+  if (!p) return null;
+  try {
+    return convertFileSrc(p);
+  } catch {
+    return null;
+  }
+});
 
 function close() {
   emit("update:open", false);
@@ -119,6 +132,33 @@ async function saveLaunchConfig() {
   });
   if (!res.ok) return;
 }
+
+async function pickCover() {
+  if (!props.game) return;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const res = await open({
+    multiple: false,
+    directory: false,
+    title: "选择封面图片",
+    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+  });
+  if (!res) return;
+  const path = Array.isArray(res) ? res[0] : res;
+  if (!path) return;
+
+  const saveRes = await invokeResult<void>("set_game_cover", {
+    input: { gameId: props.game.id, sourcePath: path },
+  });
+  if (!saveRes.ok) return;
+  emit("changed", props.game.id);
+}
+
+async function clearCover() {
+  if (!props.game) return;
+  const res = await invokeResult<void>("clear_game_cover", { gameId: props.game.id });
+  if (!res.ok) return;
+  emit("changed", props.game.id);
+}
 </script>
 
 <template>
@@ -142,6 +182,31 @@ async function saveLaunchConfig() {
         </div>
 
         <div class="mt-4 space-y-3">
+          <div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">封面</div>
+              <div class="flex items-center gap-2">
+                <Button variant="secondary" size="sm" @click="pickCover">
+                  <Icon icon="ri:image-add-line" class="size-4" />
+                  更换封面
+                </Button>
+                <Button variant="secondary" size="sm" :disabled="!game.coverPath" @click="clearCover">
+                  <Icon icon="ri:delete-back-2-line" class="size-4" />
+                  清除
+                </Button>
+              </div>
+            </div>
+            <div class="mt-2 flex items-center gap-3">
+              <div
+                class="size-16 shrink-0 overflow-hidden rounded-lg bg-linear-to-br from-zinc-200 to-zinc-100 dark:from-zinc-800 dark:to-zinc-900">
+                <img v-if="coverSrc" :src="coverSrc" alt="" class="h-full w-full object-cover" />
+              </div>
+              <div class="min-w-0 text-xs text-zinc-500 dark:text-zinc-400">
+                <div class="truncate">{{ game.coverPath ?? "未设置（会从 icon/icons 自动选择）" }}</div>
+              </div>
+            </div>
+          </div>
+
           <div>
             <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">显示名称</div>
             <div class="mt-1 flex gap-2">
