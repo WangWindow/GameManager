@@ -245,7 +245,8 @@ async function openPath(path: string) {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[opener] open failed", err);
-    setStatus("打开失败：缺少 opener 权限或插件不可用", 0);
+    const msg = err instanceof Error ? err.message : String(err);
+    setStatus(`打开失败：${msg}`, 0);
   }
 }
 

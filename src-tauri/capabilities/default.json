@@ -8,6 +8,17 @@
   "permissions": [
     "core:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
     "dialog:default",
     "core:window:allow-minimize",
     "core:window:allow-maximize",
