@@ -58,6 +58,12 @@ struct GameToml {
     entry_path: String,
     runtime_version: Option<String>,
     args: Vec<String>,
+    #[serde(default = "default_true")]
+    sandbox_home: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Serialize)]
@@ -258,6 +264,21 @@ struct GameContainerInfo {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct GameLaunchConfigDto {
+    args: Vec<String>,
+    sandbox_home: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateGameLaunchConfigInput {
+    game_id: String,
+    args: Vec<String>,
+    sandbox_home: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct CleanupContainersResult {
     deleted: u64,
 }
@@ -322,15 +343,12 @@ async fn import_game_dir_internal(
     let container_root = resolve_container_root(app, pool).await?;
     ensure_dir(&container_root)?;
     let toml_path = game_toml_path(&container_root, &id);
-    let user_data_dir = game_user_data_dir(&container_root, &id);
     let config = GameToml {
         engine_type: engine_type.clone(),
         entry_path: "www/index.html".to_string(),
         runtime_version: None,
-        args: vec![format!(
-            "--user-data-dir={}",
-            user_data_dir.to_string_lossy()
-        )],
+        args: vec![],
+        sandbox_home: true,
     };
     write_game_toml(&toml_path, &config)?;
 
@@ -381,6 +399,75 @@ async fn get_game_container_info(
         user_data_dir: user_data_dir.to_string_lossy().to_string(),
         settings_toml: settings_toml.to_string_lossy().to_string(),
     })
+}
+
+#[tauri::command]
+async fn get_game_launch_config(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    game_id: String,
+) -> Result<GameLaunchConfigDto, String> {
+    let container_root = resolve_container_root(&app, &state.pool).await?;
+    ensure_dir(&container_root)?;
+    let toml_path = game_toml_path(&container_root, &game_id);
+
+    let cfg = if toml_path.exists() {
+        read_game_toml(&toml_path)?
+    } else {
+        GameToml {
+            engine_type: "unknown".to_string(),
+            entry_path: "www/index.html".to_string(),
+            runtime_version: None,
+            args: vec![],
+            sandbox_home: true,
+        }
+    };
+
+    Ok(GameLaunchConfigDto {
+        args: cfg.args,
+        sandbox_home: cfg.sandbox_home,
+    })
+}
+
+#[tauri::command]
+async fn update_game_launch_config(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    input: UpdateGameLaunchConfigInput,
+) -> Result<(), String> {
+    let container_root = resolve_container_root(&app, &state.pool).await?;
+    ensure_dir(&container_root)?;
+    let toml_path = game_toml_path(&container_root, &input.game_id);
+
+    let mut cfg = if toml_path.exists() {
+        read_game_toml(&toml_path)?
+    } else {
+        GameToml {
+            engine_type: "unknown".to_string(),
+            entry_path: "www/index.html".to_string(),
+            runtime_version: None,
+            args: vec![],
+            sandbox_home: true,
+        }
+    };
+
+    cfg.args = input
+        .args
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    cfg.sandbox_home = input.sandbox_home;
+
+    // sandbox_home=true 时，HOME/XDG 已重定向到容器目录，默认无需 --user-data-dir。
+    // 当 sandbox_home=false 时，仍强制补齐，避免污染真实 ~/.config。
+    if !cfg.sandbox_home {
+        let user_data_dir = game_user_data_dir(&container_root, &input.game_id);
+        ensure_dir(&user_data_dir)?;
+        ensure_user_data_arg(&mut cfg.args, &user_data_dir);
+    }
+
+    write_game_toml(&toml_path, &cfg)
 }
 
 #[tauri::command]
@@ -702,16 +789,12 @@ async fn add_game(
     let container_root = resolve_container_root(&app, &state.pool).await?;
     ensure_dir(&container_root)?;
     let toml_path = game_toml_path(&container_root, &id);
-    let user_data_dir = game_user_data_dir(&container_root, &id);
     let config = GameToml {
         engine_type: input.engine_type.clone(),
         entry_path: input.path.clone(),
         runtime_version: input.runtime_version.clone(),
-        // 中文说明：默认不再强制 --disable-gpu，改为容器化 user-data-dir。
-        args: vec![format!(
-            "--user-data-dir={}",
-            user_data_dir.to_string_lossy()
-        )],
+        args: vec![],
+        sandbox_home: true,
     };
     write_game_toml(&toml_path, &config)?;
 
@@ -762,12 +845,15 @@ async fn launch_game(
             entry_path: "www/index.html".to_string(),
             runtime_version: None,
             args: vec![],
+            sandbox_home: true,
         }
     };
 
-    let user_data_dir = game_user_data_dir(&container_root, &game_id);
-    ensure_dir(&user_data_dir)?;
-    ensure_user_data_arg(&mut cfg.args, &user_data_dir);
+    if !cfg.sandbox_home {
+        let user_data_dir = game_user_data_dir(&container_root, &game_id);
+        ensure_dir(&user_data_dir)?;
+        ensure_user_data_arg(&mut cfg.args, &user_data_dir);
+    }
 
     let version = cfg
         .runtime_version
@@ -791,6 +877,19 @@ async fn launch_game(
     let pid = tokio::task::spawn_blocking(move || {
         let mut cmd = Command::new(exe);
         cmd.current_dir(&game_dir);
+
+        // 把 HOME / XDG 目录重定向到容器中，避免在真实 ~/.config/<包名> 创建目录。
+        if cfg.sandbox_home {
+            let profile_dir = game_profile_dir(&container_root, &game_id);
+            ensure_dir(&profile_dir)?;
+
+            // 中文说明：直接把 HOME/XDG 指到容器目录本身，避免额外创建 home/xdg 子目录。
+            cmd.env("HOME", &profile_dir);
+            cmd.env("XDG_CONFIG_HOME", &profile_dir);
+            cmd.env("XDG_DATA_HOME", &profile_dir);
+            cmd.env("XDG_CACHE_HOME", &profile_dir);
+        }
+
         cmd.args(cfg.args);
         cmd.arg(&game_dir);
 
@@ -893,6 +992,8 @@ pub fn run() {
             scan_games,
             update_game_title,
             get_game_container_info,
+            get_game_launch_config,
+            update_game_launch_config,
             cleanup_unused_containers,
             launch_game,
             get_nwjs_stable_info,
