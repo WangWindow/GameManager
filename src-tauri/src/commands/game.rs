@@ -78,12 +78,15 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
-    // 获取 NW.js 运行时（用于 MV/MZ/NWjs）
-    let engine_type = game.get_engine_type();
-    let nwjs_runtime_dir = if matches!(
-        engine_type,
-        EngineType::RpgMakerMV | EngineType::RpgMakerMZ | EngineType::NWjs
-    ) {
+    // 获取 NW.js 运行时（用于 MV/MZ）
+    let mut engine_type = game.get_engine_type();
+    if engine_type == EngineType::Other && game.engine_type == "nwjs" {
+        if let Some(detected) = detect_engine_type(Path::new(&game.path)) {
+            engine_type = EngineType::from_str(&detected);
+        }
+    }
+    let nwjs_runtime_dir = if matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
+    {
         let engine_service = state.engine_service.lock().await;
         let engine = if let Some(version) = game.runtime_version.as_deref() {
             engine_service.find_engine("nwjs", Some(version)).await?
@@ -95,18 +98,29 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         None
     };
 
-    if matches!(
-        engine_type,
-        EngineType::RpgMakerMV | EngineType::RpgMakerMZ | EngineType::NWjs
-    ) && nwjs_runtime_dir.is_none()
+    if matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
+        && nwjs_runtime_dir.is_none()
     {
         return Err("未安装 NW.js 运行时，请先下载并安装".to_string());
     }
 
+    let file_service = FileService::new();
+    let config_path = file_service.game_config_path(&container_path, &game.profile_key);
+    let config = if config_path.exists() {
+        Some(file_service.read_game_config(&config_path)?)
+    } else {
+        None
+    };
+
     // 启动游戏
     let launcher_service = state.launcher_service.lock().await;
     launcher_service
-        .launch_game(&game, &container_path, nwjs_runtime_dir.as_deref())
+        .launch_game(
+            &game,
+            &container_path,
+            nwjs_runtime_dir.as_deref(),
+            config.as_ref(),
+        )
         .await
 }
 
@@ -301,7 +315,11 @@ pub async fn get_game_settings(
     let file_service = FileService::new();
     let config_path = file_service.game_config_path(&root, &game.profile_key);
     if config_path.exists() {
-        return file_service.read_game_config(&config_path);
+        let mut config = file_service.read_game_config(&config_path)?;
+        if config.engine_type == "nwjs" {
+            config.engine_type = normalize_engine_type(&game);
+        }
+        return Ok(config);
     }
 
     Ok(default_game_config(&game))
@@ -329,13 +347,10 @@ pub async fn save_game_settings(
     file_service.ensure_game_dirs(&root, &game.profile_key)?;
 
     let mut config = input;
-    config.engine_type = game.engine_type.clone();
+    config.engine_type = normalize_engine_type(&game);
 
-    let engine = game.get_engine_type();
-    let requires_entry = !matches!(
-        engine,
-        EngineType::RpgMakerMV | EngineType::RpgMakerMZ | EngineType::NWjs
-    );
+    let engine = EngineType::from_str(&config.engine_type);
+    let requires_entry = matches!(engine, EngineType::Other);
     if requires_entry && config.entry_path.trim().is_empty() {
         return Err("入口文件不能为空".to_string());
     }
@@ -432,60 +447,229 @@ fn count_dirs(root: &Path, max_depth: u32) -> u32 {
 }
 
 fn detect_engine_type(path: &Path) -> Option<String> {
-    // RPG Maker MV/MZ
-    if path.join("www").join("js").join("rmmz_core.js").exists() {
-        return Some("rpgmakermz".to_string());
-    }
-    if path.join("www").join("js").join("rpg_core.js").exists() {
-        return Some("rpgmakermv".to_string());
-    }
+    let mz_score = score_rpg_maker_mz(path);
+    let mv_score = score_rpg_maker_mv(path);
+    let renpy_score = score_renpy(path);
+    let vxace_score = score_rpg_maker_vxace(path);
+    let vx_score = score_rpg_maker_vx(path);
 
-    // RPG Maker VX/VX Ace
-    if path.join("Game.exe").exists() || path.join("RPG_RT.exe").exists() {
-        return Some("rpgmakervx".to_string());
-    }
+    let candidates = [
+        ("rpgmakermz", mz_score, 1),
+        ("rpgmakermv", mv_score, 2),
+        ("renpy", renpy_score, 0),
+        ("rpgmakervxace", vxace_score, 3),
+        ("rpgmakervx", vx_score, 4),
+    ];
 
-    // NW.js
-    if path.join("package.json").exists() {
-        return Some("nwjs".to_string());
-    }
-
-    // RenPy
-    if path.join("renpy").exists()
-        || path.join("renpy.sh").exists()
-        || path.join("renpy.exe").exists()
-    {
-        return Some("renpy".to_string());
-    }
-
-    let game_dir = path.join("game");
-    if game_dir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&game_dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.eq_ignore_ascii_case("rpy"))
-                    == Some(true)
-                {
-                    return Some("renpy".to_string());
+    let mut best: Option<(&str, i32, i32)> = None;
+    for (engine, score, priority) in candidates {
+        if score < min_engine_score(engine) {
+            continue;
+        }
+        match best {
+            None => best = Some((engine, score, priority)),
+            Some((_, best_score, best_priority)) => {
+                if score > best_score || (score == best_score && priority < best_priority) {
+                    best = Some((engine, score, priority));
                 }
             }
         }
     }
 
-    None
+    best.map(|(engine, _, _)| engine.to_string())
+}
+
+fn min_engine_score(engine: &str) -> i32 {
+    match engine {
+        "rpgmakermz" | "rpgmakermv" => 4,
+        "renpy" => 4,
+        "rpgmakervxace" | "rpgmakervx" => 5,
+        _ => 0,
+    }
+}
+
+fn score_rpg_maker_mz(path: &Path) -> i32 {
+    let mut score = 0;
+    let base = path;
+    let www = path.join("www");
+    if has_mz_core(base) || has_mz_core(&www) {
+        score += 3;
+    }
+    if has_rpg_data(base) || has_rpg_data(&www) {
+        score += 2;
+    }
+    if has_package_json(base) || has_package_json(&www) {
+        score += 1;
+    }
+    score
+}
+
+fn score_rpg_maker_mv(path: &Path) -> i32 {
+    let mut score = 0;
+    let base = path;
+    let www = path.join("www");
+    if has_mv_core(base) || has_mv_core(&www) {
+        score += 3;
+    }
+    if has_rpg_data(base) || has_rpg_data(&www) {
+        score += 2;
+    }
+    if has_package_json(base) || has_package_json(&www) {
+        score += 1;
+    }
+    score
+}
+
+fn score_renpy(path: &Path) -> i32 {
+    let mut score = 0;
+    if path.join("renpy").is_dir()
+        || path.join("renpy.sh").exists()
+        || path.join("renpy.exe").exists()
+    {
+        score += 3;
+    }
+
+    let game_dir = path.join("game");
+    if game_dir.is_dir() {
+        score += 1;
+        if has_renpy_scripts(&game_dir) {
+            score += 3;
+        }
+        if has_renpy_marker_files(&game_dir) {
+            score += 1;
+        }
+    }
+
+    if has_renpy_lib(path) {
+        score += 1;
+    }
+
+    score
+}
+
+fn score_rpg_maker_vxace(path: &Path) -> i32 {
+    let mut score = 0;
+    if has_vx_executable(path) {
+        score += 2;
+    }
+    if has_rgss_dll(path, "RGSS3") {
+        score += 3;
+    }
+    if path.join("Game.ini").exists() {
+        score += 1;
+    }
+    score
+}
+
+fn score_rpg_maker_vx(path: &Path) -> i32 {
+    let mut score = 0;
+    if has_vx_executable(path) {
+        score += 2;
+    }
+    if has_rgss_dll(path, "RGSS2") || has_rgss_dll(path, "RGSS1") {
+        score += 3;
+    }
+    if path.join("Game.ini").exists() {
+        score += 1;
+    }
+    score
+}
+
+fn has_mz_core(base: &Path) -> bool {
+    let js = base.join("js");
+    js.join("rmmz_core.js").exists() || js.join("rmmz_managers.js").exists()
+}
+
+fn has_mv_core(base: &Path) -> bool {
+    let js = base.join("js");
+    js.join("rpg_core.js").exists() || js.join("rpg_managers.js").exists()
+}
+
+fn has_rpg_data(base: &Path) -> bool {
+    base.join("data").join("System.json").exists()
+}
+
+fn has_package_json(base: &Path) -> bool {
+    base.join("package.json").exists()
+}
+
+fn has_vx_executable(path: &Path) -> bool {
+    ["Game.exe", "Game", "RPG_RT.exe", "RPG_RT"]
+        .iter()
+        .any(|name| path.join(name).exists())
+}
+
+fn has_rgss_dll(path: &Path, prefix: &str) -> bool {
+    let prefix = prefix.to_lowercase();
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let name = file_name.to_string_lossy().to_lowercase();
+            if name.starts_with(&prefix) && name.ends_with(".dll") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn has_renpy_marker_files(game_dir: &Path) -> bool {
+    let marker_files = ["script.rpy", "options.rpy", "gui.rpy", "screens.rpy"];
+    marker_files.iter().any(|name| game_dir.join(name).exists())
+}
+
+fn has_renpy_scripts(game_dir: &Path) -> bool {
+    if let Ok(entries) = std::fs::read_dir(game_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| matches!(e.to_lowercase().as_str(), "rpy" | "rpyc"))
+                == Some(true)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn has_renpy_lib(path: &Path) -> bool {
+    let lib_dir = path.join("lib");
+    if !lib_dir.is_dir() {
+        return false;
+    }
+
+    if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.starts_with("py") || name.contains("python") {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 fn default_game_config(game: &Game) -> GameConfig {
     GameConfig {
-        engine_type: game.engine_type.clone(),
+        engine_type: normalize_engine_type(game),
         entry_path: game.path.clone(),
         runtime_version: game.runtime_version.clone(),
         args: Vec::new(),
         sandbox_home: true,
         cover_file: None,
     }
+}
+
+fn normalize_engine_type(game: &Game) -> String {
+    if game.engine_type == "nwjs" {
+        if let Some(detected) = detect_engine_type(Path::new(&game.path)) {
+            return detected;
+        }
+    }
+    game.engine_type.clone()
 }
 
 fn is_nwjs_runtime_dir(path: &Path) -> bool {

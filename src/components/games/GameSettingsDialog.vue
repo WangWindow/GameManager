@@ -55,10 +55,8 @@ const coverFile = ref('')
 const settingsLoading = ref(false)
 const settingsLoaded = ref(false)
 
-const isNwjsLike = computed(() =>
-  ['rpgmakermv', 'rpgmakermz', 'nwjs'].includes(engineType.value)
-)
-const requiresEntryPath = computed(() => !isNwjsLike.value)
+const isMvMz = computed(() => ['rpgmakermv', 'rpgmakermz'].includes(engineType.value))
+const requiresEntryPath = computed(() => engineType.value === 'other')
 
 const canSave = computed(() => {
   const basicValid = !!props.game && title.value.trim().length > 0 && path.value.trim().length > 0
@@ -91,7 +89,7 @@ watch(
     try {
       const config = await getGameSettings(props.game.id)
       engineType.value = config.engineType || props.game.engineType
-      entryPath.value = config.entryPath || props.game.path
+      entryPath.value = toAbsoluteEntryPath(config.entryPath || props.game.path)
       runtimeVersion.value = config.runtimeVersion ?? props.game.runtimeVersion ?? ''
       argsText.value = (config.args ?? []).join(' ')
       sandboxHome.value = config.sandboxHome ?? true
@@ -112,9 +110,11 @@ function handleSave() {
     .map((s) => s.trim())
     .filter(Boolean)
 
+  const resolvedEntryPath = toAbsoluteEntryPath(entryPath.value.trim() || path.value.trim())
+
   const settings: GameConfig = {
     engineType: engineType.value,
-    entryPath: entryPath.value.trim() || path.value.trim(),
+    entryPath: resolvedEntryPath,
     runtimeVersion: runtimeVersion.value.trim() || undefined,
     args,
     sandboxHome: sandboxHome.value,
@@ -131,16 +131,44 @@ function handleSave() {
   })
 }
 
+function isAbsolutePath(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)
+}
+
+function joinPath(base: string, sub: string): string {
+  if (base.includes('\\')) {
+    return `${base.replace(/\\+$/, '')}\\${sub.replace(/^\\+/, '')}`
+  }
+  return `${base.replace(/\/+$/, '')}/${sub.replace(/^\/+/, '')}`
+}
+
+function toAbsoluteEntryPath(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed || !props.game) return trimmed
+  if (isAbsolutePath(trimmed)) return trimmed
+  return joinPath(props.game.path, trimmed)
+}
+
+async function pickEntryFile() {
+  if (!props.game) return
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const res = await open({ title: '选择可执行文件', multiple: false })
+    if (!res) return
+    const selected = Array.isArray(res) ? res[0] ?? '' : res
+    if (!selected) return
+    entryPath.value = selected
+  } catch (e) {
+    console.error('选择可执行文件失败:', e)
+  }
+}
+
 async function openGameDir() {
   if (!props.game) return
   try {
     await openPath(props.game.path)
   } catch (e) {
-    try {
-      console.error('打开游戏目录失败:', e)
-    } catch (inner) {
-      console.error('打开游戏目录失败:', inner)
-    }
+    console.error('打开游戏目录失败:', e)
   }
 }
 
@@ -150,11 +178,7 @@ async function openProfileDir() {
     const profileDir = await getGameProfileDir(props.game.id)
     await openPath(profileDir)
   } catch (e) {
-    try {
-      console.error('打开Profile目录失败:', e)
-    } catch (inner) {
-      console.error('打开Profile目录失败:', inner)
-    }
+    console.error('打开Profile目录失败:', e)
   }
 }
 
@@ -226,7 +250,7 @@ async function pickCoverFile() {
             <div class="text-xs text-muted-foreground">可填相对游戏目录路径</div>
           </div>
 
-          <div v-if="isNwjsLike" class="space-y-2">
+          <div v-if="isMvMz" class="space-y-2">
             <label class="text-sm font-medium">NW.js 运行时版本（可选）</label>
             <Input v-model="runtimeVersion" placeholder="如：0.84.0" />
           </div>
@@ -235,9 +259,12 @@ async function pickCoverFile() {
             <div class="mb-2 text-sm font-medium">运行设置</div>
             <div v-if="settingsLoading" class="text-xs text-muted-foreground">加载设置中…</div>
             <div v-else class="space-y-3">
-              <div v-if="requiresEntryPath" class="space-y-2">
+              <div class="space-y-2">
                 <label class="text-sm font-medium">入口文件/目录</label>
-                <Input v-model="entryPath" placeholder="如：Game.exe / launcher.sh" />
+                <div class="flex gap-2">
+                  <Input v-model="entryPath" placeholder="如：Game.exe / launcher.sh" />
+                  <Button variant="secondary" size="sm" @click="pickEntryFile">选择</Button>
+                </div>
               </div>
 
               <div class="space-y-2">

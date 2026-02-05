@@ -13,8 +13,6 @@ pub enum EngineType {
     RpgMakerMV,
     /// RPG Maker MZ
     RpgMakerMZ,
-    /// NWjs游戏
-    NWjs,
     /// RenPy视觉小说
     RenPy,
     /// 其他类型
@@ -29,7 +27,6 @@ impl EngineType {
             "rpgmakervxace" | "rpg_maker_vx_ace" => Self::RpgMakerVXAce,
             "rpgmakermv" | "rpg_maker_mv" => Self::RpgMakerMV,
             "rpgmakermz" | "rpg_maker_mz" => Self::RpgMakerMZ,
-            "nwjs" => Self::NWjs,
             "renpy" => Self::RenPy,
             _ => Self::Other,
         }
@@ -42,7 +39,6 @@ impl EngineType {
             Self::RpgMakerVXAce => "rpgmakervxace",
             Self::RpgMakerMV => "rpgmakermv",
             Self::RpgMakerMZ => "rpgmakermz",
-            Self::NWjs => "nwjs",
             Self::RenPy => "renpy",
             Self::Other => "other",
         }

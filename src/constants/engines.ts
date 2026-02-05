@@ -12,7 +12,6 @@ export const SUPPORTED_ENGINES = [
   EngineType.RpgMakerVXAce,
   EngineType.RpgMakerMV,
   EngineType.RpgMakerMZ,
-  EngineType.NWjs,
   EngineType.RenPy,
   EngineType.Other,
 ]
@@ -32,7 +31,6 @@ export const ENGINE_ICONS: Record<string, string> = {
   [EngineType.RpgMakerVXAce]: 'ri:gamepad-line',
   [EngineType.RpgMakerMV]: 'ri:gamepad-line',
   [EngineType.RpgMakerMZ]: 'ri:gamepad-line',
-  [EngineType.NWjs]: 'ri:braces-line',
   [EngineType.RenPy]: 'ri:book-2-line',
   [EngineType.Other]: 'ri:question-line',
 }

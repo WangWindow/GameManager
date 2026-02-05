@@ -43,7 +43,6 @@ export enum EngineType {
   RpgMakerVXAce = 'rpgmakervxace',
   RpgMakerMV = 'rpgmakermv',
   RpgMakerMZ = 'rpgmakermz',
-  NWjs = 'nwjs',
   RenPy = 'renpy',
   Other = 'other',
 }
@@ -56,7 +55,6 @@ export const ENGINE_DISPLAY_NAMES: Record<EngineType, string> = {
   [EngineType.RpgMakerVXAce]: 'RPG Maker VX Ace',
   [EngineType.RpgMakerMV]: 'RPG Maker MV (NW.js)',
   [EngineType.RpgMakerMZ]: 'RPG Maker MZ (NW.js)',
-  [EngineType.NWjs]: 'NWjs',
   [EngineType.RenPy]: 'RenPy',
   [EngineType.Other]: 'Other',
 }

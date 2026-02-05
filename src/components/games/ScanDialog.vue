@@ -29,14 +29,14 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const root = ref('')
-const maxDepth = ref(5)
+const maxDepth = ref(3)
 
 watch(
   () => props.open,
   (val) => {
     if (!val) {
       root.value = ''
-      maxDepth.value = 5
+      maxDepth.value = 3
     }
   }
 )
