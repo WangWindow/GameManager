@@ -1,73 +1,69 @@
 <script setup lang="ts">
-import { Icon } from "@iconify/vue";
+import { Icon } from '@iconify/vue'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useWindowControls } from '@/hooks/useWindowControls'
 
-import Button from "../../components/ui/button/Button.vue";
-import { useWindowControls } from "../../features/window/useWindowControls";
-
-defineProps<{
-  title: string;
-  subtitle: string;
-}>();
+const { isTauri, isMaximized, minimize, toggleMaximize, close } = useWindowControls()
 
 const emit = defineEmits<{
-  (e: "import"): void;
-  (e: "scan"): void;
-  (e: "settings"): void;
-}>();
+  (e: 'manage'): void
+  (e: 'import'): void
+  (e: 'scan'): void
+  (e: 'settings'): void
+}>()
 
-const { isTauri, isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+const props = defineProps<{ search?: string }>()
 </script>
 
 <template>
-  <header class="border-b border-zinc-200/70 bg-white/70 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/50">
-    <div class="flex h-12 items-center gap-3 px-3">
-      <div class="flex min-w-0 items-center gap-3" data-tauri-drag-region>
-        <div
-          class="grid size-9 place-items-center rounded-lg bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900">
-          <Icon icon="ri:gamepad-line" class="size-5" />
-        </div>
-        <div class="min-w-0 leading-tight">
-          <div class="truncate text-sm font-semibold">{{ title }}</div>
-          <div class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ subtitle }}</div>
-        </div>
+  <header data-tauri-drag-region
+    class="fixed left-0 right-0 top-0 z-50 flex h-10 select-none items-center justify-between border-b bg-background/80 px-3 backdrop-blur supports-backdrop-filter:bg-background/60">
+    <div data-tauri-drag-region class="flex min-w-0 items-center gap-2">
+      <div class="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <Icon icon="ri:gamepad-fill" class="h-5 w-5" />
       </div>
+      <span data-tauri-drag-region class="text-sm font-semibold tracking-tight">GameManager</span>
+    </div>
 
-      <div class="flex-1 self-stretch" data-tauri-drag-region />
+    <div data-tauri-drag-region="false" class="flex items-center gap-2">
+      <Button variant="ghost" size="sm" class="h-8 gap-2 px-2" title="导入" @click="emit('import')">
+        <Icon icon="ri:add-line" class="h-4 w-4" />
+        <span class="text-xs">导入</span>
+      </Button>
+      <Button variant="ghost" size="sm" class="h-8 gap-2 px-2" title="扫描" @click="emit('scan')">
+        <Icon icon="ri:scan-line" class="h-4 w-4" />
+        <span class="text-xs">扫描</span>
+      </Button>
 
-      <div class="flex items-center gap-2" data-tauri-drag-region="false">
-        <Button variant="secondary" size="sm" @click="emit('import')">
-          <Icon icon="ri:add-line" class="size-4" />
-          导入
-        </Button>
-        <Button variant="secondary" size="sm" @click="emit('scan')">
-          <Icon icon="ri:search-line" class="size-4" />
-          扫描
-        </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="icon" class="h-8 w-8" title="更多">
+            <Icon icon="ri:more-2-line" class="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem @click="emit('manage')">管理中心</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @click="emit('settings')">设置</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        <button
-          class="inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
-          type="button" aria-label="设置" @click="emit('settings')">
-          <Icon icon="ri:more-2-line" class="size-5" />
-        </button>
-
-        <div v-if="isTauri" class="ml-1 flex items-center gap-1">
-          <button
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            type="button" aria-label="最小化" @click="minimize">
-            <Icon icon="ri:subtract-line" class="size-4" />
-          </button>
-          <button
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            type="button" aria-label="最大化/还原" @click="toggleMaximize">
-            <Icon :icon="isMaximized ? 'ri:checkbox-multiple-blank-line' : 'ri:checkbox-blank-line'" class="size-4" />
-          </button>
-          <button
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            type="button" aria-label="关闭" @click="close">
-            <Icon icon="ri:close-line" class="size-4" />
-          </button>
-        </div>
-      </div>
+      <Button v-if="isTauri" variant="ghost" size="icon" class="h-8 w-9" title="最小化" @click="minimize">
+        <Icon icon="ri:subtract-line" class="h-4 w-4" />
+      </Button>
+      <Button v-if="isTauri" variant="ghost" size="icon" class="h-8 w-9" title="最大化/还原" @click="toggleMaximize">
+        <Icon :icon="isMaximized ? 'ri:checkbox-multiple-blank-line' : 'ri:checkbox-blank-line'" class="h-4 w-4" />
+      </Button>
+      <Button v-if="isTauri" variant="destructive" size="icon" class="h-8 w-9" title="关闭" @click="close">
+        <Icon icon="ri:close-line" class="h-4 w-4" />
+      </Button>
     </div>
   </header>
 </template>

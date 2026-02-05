@@ -8,10 +8,9 @@ concurrency:
   cancel-in-progress: true
 
 on:
-
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -39,14 +38,11 @@ jobs:
             patchelf \
             libfuse2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: npm
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install bun
+        run: bun install
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -58,7 +54,7 @@ jobs:
             src-tauri -> target
 
       - name: Build Tauri app
-        run: npm run tauri build
+        run: bun run tauri build
 
       - name: List Tauri bundles
         run: ls -lh src-tauri/target/release/bundle

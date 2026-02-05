@@ -5,9 +5,9 @@
   "identifier": "com.choco.gamemanager",
   "build": {
     "removeUnusedCommands": true,
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:12490",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -16,6 +16,8 @@
         "title": "gamemanager",
         "width": 800,
         "height": 600,
+        "minWidth": 400,
+        "minHeight": 300,
         "decorations": false
       }
     ],

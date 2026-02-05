@@ -1,24 +1,10 @@
 {
-    // language specific settings
-    "[vue]": {
-        "editor.defaultFormatter": "Vue.volar",
-        "editor.tabSize": 2
-    },
-    "[typescript]": {
-        "editor.tabSize": 2
-    },
-    "[csharp]": {
-        "editor.tabSize": 4
-    },
-    "[python]": {
-        "editor.defaultFormatter": "charliermarsh.ruff",
-        "editor.tabSize": 4
-    },
-    "files.associations": {
-        "*.css": "tailwindcss"
-    },
-    // extension settings
-    "rust-analyzer.linkedProjects": [
-        "src-tauri/Cargo.toml"
-    ]
+  // language specific settings
+  "[vue]": {
+    "editor.defaultFormatter": "Vue.volar",
+  },
+  // extension settings
+  "rust-analyzer.linkedProjects": [
+    "src-tauri/Cargo.toml"
+  ]
 }

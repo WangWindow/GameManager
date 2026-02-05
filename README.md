@@ -20,28 +20,28 @@ GameManager 是一个基于 Tauri + Vue3 + TypeScript 的桌面游戏管理器�
 
 ## 截图
 
-![主界面截图](assets/screenshot-2026-01-10%2015-09-42.png)
+![主界面截图](assets/screenshot-2026-01-10_15-09-42.png)
 
 ## 快速开始
 
 1. 安装依赖
 
-	```bash
-	npm install
-	```
+ ```bash
+ npm install
+ ```
 
-2. 开发模式启动
+1. 开发模式启动
 
-	```bash
-	npm run tauri dev
-	```
+ ```bash
+ npm run tauri dev
+ ```
 
-3. 构建发布版
+1. 构建发布版
 
-	```bash
-	npm run build
-	npm run tauri build
-	```
+ ```bash
+ npm run build
+ npm run tauri build
+ ```
 
 ## 推荐开发环境
 

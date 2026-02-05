@@ -1,0 +1,266 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { SUPPORTED_ENGINES, getEngineDisplayName } from '@/constants/engines'
+import { getGameProfileDir, getGameSettings, openPath } from '@/lib/api'
+import type { GameConfig, GameDto } from '@/types'
+import type { EngineType } from '@/types/engine'
+
+interface Props {
+  open: boolean
+  game: GameDto | null
+}
+
+interface Emits {
+  (e: 'update:open', value: boolean): void
+  (e: 'save', payload: {
+    id: string
+    title: string
+    engineType: string
+    path: string
+    runtimeVersion?: string
+    settings: GameConfig
+  }): void
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
+
+const title = ref('')
+const engineType = ref<string>('')
+const path = ref('')
+const runtimeVersion = ref('')
+const entryPath = ref('')
+const argsText = ref('')
+const sandboxHome = ref(true)
+const coverFile = ref('')
+const settingsLoading = ref(false)
+const settingsLoaded = ref(false)
+
+const isNwjsLike = computed(() =>
+  ['rpgmakermv', 'rpgmakermz', 'nwjs'].includes(engineType.value)
+)
+const requiresEntryPath = computed(() => !isNwjsLike.value)
+
+const canSave = computed(() => {
+  const basicValid = !!props.game && title.value.trim().length > 0 && path.value.trim().length > 0
+  const entryValid = !requiresEntryPath.value || entryPath.value.trim().length > 0
+  return basicValid && entryValid && !settingsLoading.value
+})
+
+watch(
+  () => props.game,
+  (game) => {
+    if (!game) return
+    title.value = game.title
+    engineType.value = game.engineType
+    path.value = game.path
+    runtimeVersion.value = game.runtimeVersion ?? ''
+    entryPath.value = game.path
+    argsText.value = ''
+    sandboxHome.value = true
+    coverFile.value = ''
+    settingsLoaded.value = false
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.open,
+  async (open) => {
+    if (!open || !props.game || settingsLoaded.value) return
+    settingsLoading.value = true
+    try {
+      const config = await getGameSettings(props.game.id)
+      engineType.value = config.engineType || props.game.engineType
+      entryPath.value = config.entryPath || props.game.path
+      runtimeVersion.value = config.runtimeVersion ?? props.game.runtimeVersion ?? ''
+      argsText.value = (config.args ?? []).join(' ')
+      sandboxHome.value = config.sandboxHome ?? true
+      coverFile.value = config.coverFile ?? ''
+      settingsLoaded.value = true
+    } catch (e) {
+      console.error('加载游戏设置失败:', e)
+    } finally {
+      settingsLoading.value = false
+    }
+  }
+)
+
+function handleSave() {
+  if (!props.game) return
+  const args = argsText.value
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const settings: GameConfig = {
+    engineType: engineType.value,
+    entryPath: entryPath.value.trim() || path.value.trim(),
+    runtimeVersion: runtimeVersion.value.trim() || undefined,
+    args,
+    sandboxHome: sandboxHome.value,
+    coverFile: coverFile.value.trim() || undefined,
+  }
+
+  emit('save', {
+    id: props.game.id,
+    title: title.value.trim(),
+    engineType: engineType.value,
+    path: path.value.trim(),
+    runtimeVersion: runtimeVersion.value.trim() || undefined,
+    settings,
+  })
+}
+
+async function openGameDir() {
+  if (!props.game) return
+  try {
+    await openPath(props.game.path)
+  } catch (e) {
+    try {
+      console.error('打开游戏目录失败:', e)
+    } catch (inner) {
+      console.error('打开游戏目录失败:', inner)
+    }
+  }
+}
+
+async function openProfileDir() {
+  if (!props.game) return
+  try {
+    const profileDir = await getGameProfileDir(props.game.id)
+    await openPath(profileDir)
+  } catch (e) {
+    try {
+      console.error('打开Profile目录失败:', e)
+    } catch (inner) {
+      console.error('打开Profile目录失败:', inner)
+    }
+  }
+}
+
+async function pickCoverFile() {
+  if (!props.game) return
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const res = await open({ title: '选择图标/封面', multiple: false })
+    if (!res) return
+    const selected = Array.isArray(res) ? res[0] ?? '' : res
+    if (!selected) return
+    coverFile.value = selected
+  } catch (e) {
+    console.error('选择图标失败:', e)
+  }
+}
+</script>
+
+<template>
+  <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
+    <DialogContent class="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>游戏设置</DialogTitle>
+        <DialogDescription>编辑游戏信息与运行参数</DialogDescription>
+      </DialogHeader>
+
+      <ScrollArea class="max-h-[60vh] pr-3">
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <label class="text-sm font-medium">游戏名称</label>
+            <Input v-model="title" placeholder="游戏名称" />
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium">引擎类型</label>
+            <Select v-model="engineType">
+              <SelectTrigger>
+                <SelectValue placeholder="选择引擎类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="engine in SUPPORTED_ENGINES" :key="engine" :value="engine">
+                  {{ getEngineDisplayName(engine as EngineType) }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium">游戏路径</label>
+            <Input v-model="path" placeholder="游戏路径" />
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium">打开目录</label>
+            <div class="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" @click="openGameDir">打开游戏目录</Button>
+              <Button variant="secondary" size="sm" @click="openProfileDir">打开 Profile 目录</Button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium">图标/封面（可选）</label>
+            <div class="flex items-center gap-2">
+              <Input v-model="coverFile" placeholder="如：www/icon/icon.png" />
+              <Button variant="secondary" size="icon" class="h-9 w-9" @click="pickCoverFile">
+                …
+              </Button>
+            </div>
+            <div class="text-xs text-muted-foreground">可填相对游戏目录路径</div>
+          </div>
+
+          <div v-if="isNwjsLike" class="space-y-2">
+            <label class="text-sm font-medium">NW.js 运行时版本（可选）</label>
+            <Input v-model="runtimeVersion" placeholder="如：0.84.0" />
+          </div>
+
+          <div class="rounded-md border p-3">
+            <div class="mb-2 text-sm font-medium">运行设置</div>
+            <div v-if="settingsLoading" class="text-xs text-muted-foreground">加载设置中…</div>
+            <div v-else class="space-y-3">
+              <div v-if="requiresEntryPath" class="space-y-2">
+                <label class="text-sm font-medium">入口文件/目录</label>
+                <Input v-model="entryPath" placeholder="如：Game.exe / launcher.sh" />
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-sm font-medium">启动参数（空格分隔）</label>
+                <Input v-model="argsText" placeholder="--debug --foo=bar" />
+              </div>
+
+              <div class="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <div class="text-sm font-medium">沙盒主目录</div>
+                  <div class="text-xs text-muted-foreground">隔离游戏的用户数据</div>
+                </div>
+                <Switch :model-value="sandboxHome" @update:model-value="(v) => (sandboxHome = Boolean(v))" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
+
+      <DialogFooter>
+        <Button variant="ghost" @click="emit('update:open', false)">取消</Button>
+        <Button :disabled="!canSave" @click="handleSave">保存</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>
