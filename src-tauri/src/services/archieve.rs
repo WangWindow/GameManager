@@ -125,7 +125,7 @@ impl ArchiveService {
 
     /// 确保目录存在
     fn ensure_dir(&self, path: &Path) -> Result<(), String> {
-        std::fs::create_dir_all(path).map_err(|e| format!("无法创建目录 {}: {}", path.display(), e))
+        crate::services::path::ensure_dir(path)
     }
 
     /// 安全地连接路径，防止路径遍历攻击

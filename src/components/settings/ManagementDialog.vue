@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,9 +24,11 @@ interface Emits {
   (e: 'update:showStatusBar', value: boolean): void
   (e: 'downloadNwjs'): void
   (e: 'cleanupContainers'): void
+  (e: 'updateEngine', engine: EngineDto): void
+  (e: 'removeEngine', engine: EngineDto): void
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const engines = ref<EngineDto[]>([])
@@ -45,7 +47,19 @@ async function fetchEngines() {
 
 onMounted(() => {
   fetchEngines()
+  window.addEventListener('gm:refresh-engines', fetchEngines)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('gm:refresh-engines', fetchEngines)
+})
+
+watch(
+  () => props.open,
+  (open) => {
+    if (open) fetchEngines()
+  }
+)
 </script>
 
 <template>
@@ -97,7 +111,10 @@ onMounted(() => {
                   {{ engine.engineType }} · {{ engine.version }}
                 </div>
               </div>
-              <div class="text-xs text-muted-foreground">已安装</div>
+              <div class="flex items-center gap-2">
+                <Button variant="ghost" size="sm" @click="emit('updateEngine', engine)">更新</Button>
+                <Button variant="destructive" size="sm" @click="emit('removeEngine', engine)">卸载</Button>
+              </div>
             </div>
           </div>
           <div class="text-xs text-muted-foreground">

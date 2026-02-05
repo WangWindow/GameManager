@@ -74,7 +74,8 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
 
     // 获取容器根目录
     let container_root = state.container_root.lock().await;
-    let container_path = std::path::PathBuf::from(container_root.as_str());
+    let container_path =
+        crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
     // 获取 NW.js 运行时（用于 MV/MZ/NWjs）
@@ -93,6 +94,14 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
     } else {
         None
     };
+
+    if matches!(
+        engine_type,
+        EngineType::RpgMakerMV | EngineType::RpgMakerMZ | EngineType::NWjs
+    ) && nwjs_runtime_dir.is_none()
+    {
+        return Err("未安装 NW.js 运行时，请先下载并安装".to_string());
+    }
 
     // 启动游戏
     let launcher_service = state.launcher_service.lock().await;
@@ -116,6 +125,10 @@ pub async fn import_game_dir(
         return Err("游戏路径不存在".to_string());
     }
 
+    if is_nwjs_runtime_dir(Path::new(&import_path)) {
+        return Err("检测到 NW.js 运行器目录，无法作为游戏导入".to_string());
+    }
+
     let input = AddGameInput {
         title: None,
         engine_type,
@@ -126,7 +139,7 @@ pub async fn import_game_dir(
     let game = service.add_game(input).await?;
 
     let container_root = state.container_root.lock().await;
-    let root = PathBuf::from(container_root.as_str());
+    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
     // 尝试自动发现封面
@@ -154,7 +167,7 @@ pub async fn scan_games(
     let file_service = FileService::new();
 
     let container_root = state.container_root.lock().await;
-    let root_path = PathBuf::from(container_root.as_str());
+    let root_path = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
     let existing = service.get_all_games().await?;
@@ -194,6 +207,10 @@ pub async fn scan_games(
         }
 
         if depth > input.max_depth {
+            continue;
+        }
+
+        if is_nwjs_runtime_dir(&dir) {
             continue;
         }
 
@@ -278,7 +295,7 @@ pub async fn get_game_settings(
         .ok_or_else(|| format!("游戏不存在: {}", id))?;
 
     let container_root = state.container_root.lock().await;
-    let root = PathBuf::from(container_root.as_str());
+    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
     let file_service = FileService::new();
@@ -304,7 +321,7 @@ pub async fn save_game_settings(
         .ok_or_else(|| format!("游戏不存在: {}", id))?;
 
     let container_root = state.container_root.lock().await;
-    let root = PathBuf::from(container_root.as_str());
+    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
     let file_service = FileService::new();
@@ -434,6 +451,13 @@ fn detect_engine_type(path: &Path) -> Option<String> {
     }
 
     // RenPy
+    if path.join("renpy").exists()
+        || path.join("renpy.sh").exists()
+        || path.join("renpy.exe").exists()
+    {
+        return Some("renpy".to_string());
+    }
+
     let game_dir = path.join("game");
     if game_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&game_dir) {
@@ -464,9 +488,22 @@ fn default_game_config(game: &Game) -> GameConfig {
     }
 }
 
+fn is_nwjs_runtime_dir(path: &Path) -> bool {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if name.starts_with("nwjs-") || name.starts_with("nwjs-sdk-") {
+        return true;
+    }
+
+    let has_exe = path.join("nw").exists() || path.join("nwjs").exists();
+    let has_pak = path.join("nw.pak").exists() || path.join("nw_100_percent.pak").exists();
+    let has_icudtl = path.join("icudtl.dat").exists();
+    let has_locales = path.join("locales").is_dir();
+
+    has_exe && has_pak && has_icudtl && has_locales
+}
+
 fn normalize_path(path: &Path) -> String {
-    std::fs::canonicalize(path)
-        .unwrap_or_else(|_| path.to_path_buf())
+    crate::services::path::canonicalize_path(path)
         .to_string_lossy()
         .to_string()
 }

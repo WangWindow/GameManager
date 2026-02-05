@@ -82,7 +82,7 @@ impl Game {
         path: String,
         runtime_version: Option<String>,
     ) -> Self {
-        let now = crate::utils::now_unix_ms();
+        let now = crate::services::now_unix_ms();
         Self {
             id,
             profile_key,

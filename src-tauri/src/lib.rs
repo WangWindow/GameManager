@@ -9,7 +9,6 @@
 mod commands;
 mod models;
 mod services;
-mod utils;
 
 use services::db;
 use sqlx::SqlitePool;
@@ -169,6 +168,8 @@ pub fn run() {
             commands::find_engine,
             commands::add_engine,
             commands::delete_engine,
+            commands::get_engine_update_info,
+            commands::update_engine,
             // 设置相关命令
             commands::get_app_settings,
             commands::set_container_root,

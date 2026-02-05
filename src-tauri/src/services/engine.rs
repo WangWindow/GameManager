@@ -26,6 +26,20 @@ impl EngineService {
         Ok(engines)
     }
 
+    /// 根据ID获取引擎
+    pub async fn get_engine_by_id(&self, id: &str) -> Result<Option<Engine>, String> {
+        let engine = sqlx::query_as::<_, Engine>(
+            "SELECT id, name, version, engine_type, path, installed_at
+             FROM engines WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| format!("查询引擎失败: {}", e))?;
+
+        Ok(engine)
+    }
+
     /// 根据类型和版本查找引擎
     pub async fn find_engine(
         &self,
@@ -107,6 +121,26 @@ impl EngineService {
             .execute(&self.pool)
             .await
             .map_err(|e| format!("删除引擎失败: {}", e))?;
+
+        Ok(())
+    }
+
+    /// 更新引擎安装信息
+    pub async fn update_engine_install(
+        &self,
+        id: &str,
+        version: String,
+        path: String,
+    ) -> Result<(), String> {
+        let installed_at = crate::services::now_unix_ms();
+        sqlx::query("UPDATE engines SET version = ?, path = ?, installed_at = ? WHERE id = ?")
+            .bind(version)
+            .bind(path)
+            .bind(installed_at)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| format!("更新引擎失败: {}", e))?;
 
         Ok(())
     }

@@ -12,6 +12,8 @@ import type {
   ScanGamesResult,
   GameConfig,
   EngineDto,
+  EngineUpdateInfo,
+  EngineUpdateResult,
   AppSettings,
   SetContainerRootInput,
   NwjsStableInfo,
@@ -153,6 +155,20 @@ export async function addEngine(
  */
 export async function deleteEngine(id: string): Promise<void> {
   return invoke<void>('delete_engine', { id })
+}
+
+/**
+ * 获取引擎更新信息
+ */
+export async function getEngineUpdateInfo(id: string): Promise<EngineUpdateInfo> {
+  return invoke<EngineUpdateInfo>('get_engine_update_info', { id })
+}
+
+/**
+ * 更新引擎
+ */
+export async function updateEngine(id: string): Promise<EngineUpdateResult> {
+  return invoke<EngineUpdateResult>('update_engine', { id })
 }
 
 // ============ 设置相关API ============

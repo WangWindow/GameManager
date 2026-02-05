@@ -80,6 +80,27 @@ pub struct EngineDto {
     pub installed_at: i64,
 }
 
+/// 引擎更新检测信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineUpdateInfo {
+    pub engine_id: String,
+    pub current_version: String,
+    pub latest_version: String,
+    pub update_available: bool,
+}
+
+/// 引擎更新结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineUpdateResult {
+    pub engine_id: String,
+    pub updated: bool,
+    pub from_version: String,
+    pub to_version: String,
+    pub install_dir: Option<String>,
+}
+
 /// 游戏启动结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -11,7 +11,7 @@ use std::path::Path;
 pub async fn init_database(db_path: &Path) -> Result<SqlitePool, String> {
     // 确保数据库目录存在
     if let Some(parent) = db_path.parent() {
-        crate::utils::ensure_dir(parent)?;
+        crate::services::path::ensure_dir(parent)?;
     }
 
     // 创建连接选项

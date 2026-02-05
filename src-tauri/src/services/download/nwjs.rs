@@ -3,7 +3,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -144,11 +144,6 @@ fn app_runtime_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir.join("runtimes").join("nwjs"))
 }
 
-fn ensure_dir(path: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(path)
-        .map_err(|e| format!("failed to create dir {}: {e}", path.display()))
-}
-
 pub async fn download_and_install(
     app: &AppHandle,
     version: String,
@@ -159,10 +154,10 @@ pub async fn download_and_install(
     let task_id = Uuid::new_v4().to_string();
 
     let runtime_root = app_runtime_root(app)?;
-    ensure_dir(&runtime_root)?;
+    crate::services::path::ensure_dir(&runtime_root)?;
 
     let download_dir = runtime_root.join("_downloads");
-    ensure_dir(&download_dir)?;
+    crate::services::path::ensure_dir(&download_dir)?;
 
     let ext = nwjs_archive_ext(&target);
     let archive_path = download_dir.join(format!("{task_id}-{version}-{target}.{ext}"));
@@ -214,12 +209,24 @@ pub async fn download_and_install(
 
     file.flush().ok();
 
+    let _ = app.emit(
+        "nwjs_install_stage",
+        serde_json::json!({
+            "taskId": task_id,
+            "version": version,
+            "flavor": flavor,
+            "target": target,
+            "stage": "downloaded",
+            "label": "下载完成，正在解压…"
+        }),
+    );
+
     // 使用 ArchiveService 进行解压
     let archive_service = ArchiveService::new();
 
     let tmp = TempDir::new().map_err(|e| format!("failed to create temp dir: {e}"))?;
     let tmp_extract = tmp.path().join("extract");
-    ensure_dir(&tmp_extract)?;
+    crate::services::path::ensure_dir(&tmp_extract)?;
 
     // 根据扩展名自动选择解压方法
     archive_service.extract_auto(&archive_path, &tmp_extract)?;
@@ -244,6 +251,18 @@ pub async fn download_and_install(
 
     // Best-effort cleanup of downloaded archive.
     let _ = std::fs::remove_file(&archive_path);
+
+    let _ = app.emit(
+        "nwjs_install_stage",
+        serde_json::json!({
+            "taskId": task_id,
+            "version": version,
+            "flavor": flavor,
+            "target": target,
+            "stage": "installed",
+            "label": "解压完成"
+        }),
+    );
 
     Ok(NwjsInstallResult {
         task_id,

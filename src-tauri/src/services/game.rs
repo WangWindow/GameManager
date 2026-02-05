@@ -143,7 +143,7 @@ impl GameService {
 
     /// 更新游戏最后游玩时间
     pub async fn update_last_played(&self, id: &str) -> Result<(), String> {
-        let now = crate::utils::now_unix_ms();
+        let now = crate::services::now_unix_ms();
         sqlx::query("UPDATE games SET last_played_at = ? WHERE id = ?")
             .bind(now)
             .bind(id)

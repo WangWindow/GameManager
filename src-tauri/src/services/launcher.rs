@@ -99,7 +99,6 @@ impl LauncherService {
         let nw_path = self.find_nwjs_executable(game_path, nwjs_runtime_dir)?;
 
         let mut cmd = Command::new(&nw_path);
-        cmd.arg(game_path);
         cmd.current_dir(game_path);
 
         // 设置用户数据目录
@@ -107,6 +106,16 @@ impl LauncherService {
             .file_service
             .game_user_data_dir(container_root, &game.profile_key);
         cmd.arg(format!("--user-data-dir={}", user_data_dir.display()));
+
+        // 指定崩溃报告目录（避免写入 ~/.config）
+        let crash_dir = self
+            .file_service
+            .game_crash_dir(container_root, &game.profile_key);
+        cmd.arg(format!("--crash-dumps-dir={}", crash_dir.display()));
+        cmd.env("BREAKPAD_DUMP_LOCATION", crash_dir);
+
+        // 最后传入应用路径
+        cmd.arg(game_path);
 
         let child = cmd
             .spawn()

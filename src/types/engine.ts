@@ -20,6 +20,21 @@ export interface EngineDto {
   installedAt: number
 }
 
+export interface EngineUpdateInfo {
+  engineId: string
+  currentVersion: string
+  latestVersion: string
+  updateAvailable: boolean
+}
+
+export interface EngineUpdateResult {
+  engineId: string
+  updated: boolean
+  fromVersion: string
+  toVersion: string
+  installDir?: string
+}
+
 /**
  * 引擎类型枚举
  */

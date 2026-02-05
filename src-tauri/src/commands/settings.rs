@@ -31,7 +31,7 @@ pub async fn set_container_root(
     // 验证路径
     let path = std::path::Path::new(&input.container_root);
     if !path.exists() {
-        crate::utils::ensure_dir(path)?;
+        crate::services::path::ensure_dir(path)?;
     }
 
     // 保存到数据库

@@ -27,7 +27,7 @@ impl Engine {
         engine_type: String,
         path: String,
     ) -> Self {
-        let now = crate::utils::now_unix_ms();
+        let now = crate::services::now_unix_ms();
         Self {
             id,
             name,
@@ -39,13 +39,4 @@ impl Engine {
     }
 }
 
-/// 引擎版本信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EngineVersion {
-    /// 版本号
-    pub version: String,
-    /// 下载URL
-    pub download_url: String,
-    /// 是否已安装
-    pub installed: bool,
-}
+// EngineVersion 已废弃（统一由运行器更新接口提供版本信息）。

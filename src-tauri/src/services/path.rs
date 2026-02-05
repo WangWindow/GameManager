@@ -1,5 +1,22 @@
 use std::path::{Path, PathBuf};
 
+/// 确保目录存在，不存在则创建
+pub fn ensure_dir(path: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(path).map_err(|e| format!("创建目录失败 {}: {}", path.display(), e))
+}
+
+/// 规范化路径（失败时返回原路径）
+pub fn canonicalize_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// 判断路径是否在根目录内
+pub fn is_within_dir(path: &Path, root: &Path) -> bool {
+    let path = canonicalize_path(path);
+    let root = canonicalize_path(root);
+    path.starts_with(root)
+}
+
 /// 文件管理服务
 pub struct FileService;
 
@@ -20,6 +37,12 @@ impl FileService {
             .join("User Data")
     }
 
+    /// 获取崩溃报告目录
+    pub fn game_crash_dir(&self, container_root: &Path, profile_key: &str) -> PathBuf {
+        self.game_profile_dir(container_root, profile_key)
+            .join("Crash Reports")
+    }
+
     /// 获取游戏配置文件路径
     pub fn game_config_path(&self, container_root: &Path, profile_key: &str) -> PathBuf {
         self.game_profile_dir(container_root, profile_key)
@@ -30,9 +53,11 @@ impl FileService {
     pub fn ensure_game_dirs(&self, container_root: &Path, profile_key: &str) -> Result<(), String> {
         let profile_dir = self.game_profile_dir(container_root, profile_key);
         let user_data_dir = self.game_user_data_dir(container_root, profile_key);
+        let crash_dir = self.game_crash_dir(container_root, profile_key);
 
-        crate::utils::ensure_dir(&profile_dir)?;
-        crate::utils::ensure_dir(&user_data_dir)?;
+        ensure_dir(&profile_dir)?;
+        ensure_dir(&user_data_dir)?;
+        ensure_dir(&crash_dir)?;
 
         Ok(())
     }
@@ -97,7 +122,7 @@ impl FileService {
         source_path: &Path,
     ) -> Result<PathBuf, String> {
         let profile_dir = self.game_profile_dir(container_root, profile_key);
-        crate::utils::ensure_dir(&profile_dir)?;
+        ensure_dir(&profile_dir)?;
 
         let ext = source_path
             .extension()
