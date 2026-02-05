@@ -43,6 +43,7 @@ const {
   handleImportSubmit,
   handleScanSubmit,
   handleGameSave,
+  handleRefreshCover,
 } = useGameLibraryActions({
   refresh: fetchGames,
   updateTask,
@@ -147,7 +148,8 @@ async function confirmDeleteGame() {
     <ImportDialog v-model:open="importOpen" :loading="importLoading" @submit="handleImportSubmit" />
     <ScanDialog v-model:open="scanOpen" :loading="scanLoading" @submit="handleScanSubmit" />
 
-    <GameSettingsDialog v-model:open="gameSettingsOpen" :game="selectedGame" @save="handleGameSave" />
+    <GameSettingsDialog v-model:open="gameSettingsOpen" :game="selectedGame" @save="handleGameSave"
+      @refreshCover="handleRefreshCover" />
 
     <ManagementDialog v-model:open="manageOpen" :show-status-bar="showStatusBar"
       @update:showStatusBar="(v) => (showStatusBar = v)" @downloadNwjs="handleDownloadNwjs"

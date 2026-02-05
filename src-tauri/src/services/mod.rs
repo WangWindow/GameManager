@@ -6,6 +6,7 @@ pub mod download;
 pub mod engine_manager;
 pub mod game_launcher;
 pub mod game_manager;
+pub mod bottles;
 pub mod path;
 pub mod utils;
 
@@ -13,5 +14,6 @@ pub mod utils;
 pub use engine_manager::EngineService;
 pub use game_launcher::LauncherService;
 pub use game_manager::GameService;
+pub use bottles::BottlesService;
 pub use path::FileService;
 pub use utils::{ArchiveService, now_unix_ms};

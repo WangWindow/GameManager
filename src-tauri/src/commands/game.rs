@@ -1,5 +1,6 @@
 use crate::models::*;
-use crate::services::{EngineService, FileService, GameService, LauncherService};
+use crate::services::{EngineService, FileService, GameService, LauncherService, db};
+use sqlx::SqlitePool;
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,6 +13,7 @@ pub struct AppState {
     pub game_service: Arc<Mutex<GameService>>,
     pub engine_service: Arc<Mutex<EngineService>>,
     pub launcher_service: Arc<Mutex<LauncherService>>,
+    pub pool: SqlitePool,
     pub container_root: Arc<Mutex<String>>,
 }
 
@@ -20,7 +22,17 @@ pub struct AppState {
 pub async fn get_games(state: State<'_, AppState>) -> Result<Vec<GameDto>, String> {
     let service = state.game_service.lock().await;
     let games = service.get_all_games().await?;
-    let dtos = games.into_iter().map(|g| service.to_dto(g)).collect();
+    let container_root = state.container_root.lock().await;
+    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    drop(container_root);
+    let file_service = FileService::new();
+    let dtos = games
+        .into_iter()
+        .map(|g| {
+            let dto = service.to_dto(g.clone());
+            fill_cover_from_config(&file_service, &root, &g, dto)
+        })
+        .collect();
     Ok(dtos)
 }
 
@@ -29,7 +41,20 @@ pub async fn get_games(state: State<'_, AppState>) -> Result<Vec<GameDto>, Strin
 pub async fn get_game(id: String, state: State<'_, AppState>) -> Result<Option<GameDto>, String> {
     let service = state.game_service.lock().await;
     let game = service.get_game_by_id(&id).await?;
-    Ok(game.map(|g| service.to_dto(g)))
+    if let Some(game) = game {
+        let container_root = state.container_root.lock().await;
+        let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+        drop(container_root);
+        let file_service = FileService::new();
+        let dto = service.to_dto(game.clone());
+        return Ok(Some(fill_cover_from_config(
+            &file_service,
+            &root,
+            &game,
+            dto,
+        )));
+    }
+    Ok(None)
 }
 
 /// 添加游戏
@@ -106,11 +131,31 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
 
     let file_service = FileService::new();
     let config_path = file_service.game_config_path(&container_path, &game.profile_key);
-    let config = if config_path.exists() {
+    let mut config = if config_path.exists() {
         Some(file_service.read_game_config(&config_path)?)
     } else {
         None
     };
+
+    if let Some(cfg) = config.as_mut() {
+        let enabled = db::get_setting(&state.pool, SETTING_BOTTLES_ENABLED)
+            .await?
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        if !enabled {
+            cfg.use_bottles = false;
+            cfg.bottle_name = None;
+        } else if cfg.use_bottles && cfg.bottle_name.as_deref().unwrap_or("").is_empty() {
+            let default_bottle = db::get_setting(&state.pool, SETTING_BOTTLES_DEFAULT)
+                .await?
+                .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
+            if let Some(name) = default_bottle {
+                cfg.bottle_name = Some(name);
+            } else {
+                return Err("请选择 Bottles bottle".to_string());
+            }
+        }
+    }
 
     // 启动游戏
     let launcher_service = state.launcher_service.lock().await;
@@ -132,21 +177,28 @@ pub async fn import_game_dir(
 ) -> Result<GameDto, String> {
     let service = state.game_service.lock().await;
 
-    let import_path = normalize_path(Path::new(&input.path));
+    let executable_path = normalize_path(Path::new(&input.executable_path));
     let engine_type = input.engine_type;
 
-    if !Path::new(&import_path).exists() {
-        return Err("游戏路径不存在".to_string());
+    let exe_path = Path::new(&executable_path);
+    if !exe_path.exists() || !exe_path.is_file() {
+        return Err("可执行文件不存在".to_string());
     }
 
-    if is_nwjs_runtime_dir(Path::new(&import_path)) {
+    let game_dir = exe_path
+        .parent()
+        .ok_or_else(|| "无法解析游戏目录".to_string())?;
+
+    if is_nwjs_runtime_dir(game_dir) {
         return Err("检测到 NW.js 运行器目录，无法作为游戏导入".to_string());
     }
 
+    let title = derive_game_title(exe_path, game_dir);
+
     let input = AddGameInput {
-        title: None,
-        engine_type,
-        path: import_path.clone(),
+        title: Some(title),
+        engine_type: engine_type.clone(),
+        path: normalize_path(game_dir),
         runtime_version: None,
     };
 
@@ -156,18 +208,56 @@ pub async fn import_game_dir(
     let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
     drop(container_root);
 
-    // 尝试自动发现封面
+    // 写入默认配置，记录入口文件
     let file_service = FileService::new();
-    let cover_path = file_service.find_cover_image(Path::new(&import_path));
-    if let Some(cover) = cover_path {
-        if let Ok(saved) = file_service.save_cover_to_profile(&root, &game.profile_key, &cover) {
-            let _ = service
-                .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
-                .await;
-        }
+    let config_path = file_service.game_config_path(&root, &game.profile_key);
+    if let Err(e) = file_service.ensure_game_dirs(&root, &game.profile_key) {
+        return Err(e);
     }
+    let mut config = default_game_config(&game);
+    config.entry_path = executable_path.clone();
+    let _ = file_service.write_game_config(&config_path, &config);
+
+    // 按优先级提取图标/封面
+    let entry_exe = Some(exe_path);
+    update_game_cover(
+        &service,
+        &file_service,
+        &root,
+        &game,
+        &engine_type,
+        game_dir,
+        entry_exe,
+    )
+    .await;
 
     Ok(service.to_dto(game))
+}
+
+fn derive_game_title(exe_path: &Path, game_dir: &Path) -> String {
+    let stem = exe_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .trim();
+    let stem_lower = stem.to_lowercase();
+    let invalid_names = ["game", "nw", "nwjs", "rpg_rt"];
+
+    if !stem.is_empty() && !invalid_names.iter().any(|n| *n == stem_lower) {
+        return stem.to_string();
+    }
+
+    let dir_name = game_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .trim();
+
+    if !dir_name.is_empty() {
+        return dir_name.to_string();
+    }
+
+    "未命名游戏".to_string()
 }
 
 /// 扫描游戏目录
@@ -236,7 +326,7 @@ pub async fn scan_games(
             } else {
                 let input = AddGameInput {
                     title: None,
-                    engine_type,
+                    engine_type: engine_type.clone(),
                     path: path_str.clone(),
                     runtime_version: None,
                 };
@@ -245,15 +335,16 @@ pub async fn scan_games(
                 existing_paths.insert(path_str);
                 imported += 1;
 
-                if let Some(cover) = file_service.find_cover_image(&dir) {
-                    if let Ok(saved) =
-                        file_service.save_cover_to_profile(&root_path, &game.profile_key, &cover)
-                    {
-                        let _ = service
-                            .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
-                            .await;
-                    }
-                }
+                update_game_cover(
+                    &service,
+                    &file_service,
+                    &root_path,
+                    &game,
+                    &engine_type,
+                    &dir,
+                    None,
+                )
+                .await;
             }
 
             // 已识别为游戏目录，跳过更深层扫描
@@ -294,6 +385,243 @@ pub async fn scan_games(
         imported,
         skipped_existing,
     })
+}
+
+/// 按优先级更新封面图标
+async fn update_game_cover(
+    service: &GameService,
+    file_service: &FileService,
+    root: &Path,
+    game: &Game,
+    engine_type: &str,
+    game_dir: &Path,
+    entry_exe: Option<&Path>,
+) {
+    let saved = resolve_cover_for_game(
+        file_service,
+        root,
+        &game.profile_key,
+        engine_type,
+        game_dir,
+        entry_exe,
+    );
+    if let Some(saved) = saved {
+        let _ = service
+            .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
+            .await;
+        let config_path = file_service.game_config_path(root, &game.profile_key);
+        let mut config = if config_path.exists() {
+            file_service
+                .read_game_config(&config_path)
+                .unwrap_or_default()
+        } else {
+            default_game_config(game)
+        };
+        if let Some(name) = saved.file_name().and_then(|n| n.to_str()) {
+            if !name.trim().is_empty() {
+                config.cover_file = Some(name.to_string());
+                let _ = file_service.write_game_config(&config_path, &config);
+            }
+        }
+    }
+}
+
+fn resolve_cover_for_game(
+    file_service: &FileService,
+    root: &Path,
+    profile_key: &str,
+    engine_type: &str,
+    game_dir: &Path,
+    entry_exe: Option<&Path>,
+) -> Option<PathBuf> {
+    let engine = EngineType::from_str(engine_type);
+    let exe_candidate = entry_exe
+        .filter(|p| p.exists() && p.is_file())
+        .map(|p| p.to_path_buf())
+        .or_else(|| find_executable_for_icon(engine.clone(), game_dir));
+
+    let save_image = |path: &Path| {
+        file_service
+            .save_cover_to_profile(root, profile_key, path)
+            .ok()
+    };
+    let save_exe_icon =
+        |path: &Path| file_service.save_exe_icon_to_profile(root, profile_key, path);
+
+    match engine {
+        EngineType::RpgMakerVX
+        | EngineType::RpgMakerVXAce
+        | EngineType::RpgMakerMV
+        | EngineType::RpgMakerMZ => {
+            if let Some(icon) = file_service.find_icon_dir_image(game_dir) {
+                if let Some(saved) = save_image(&icon) {
+                    return Some(saved);
+                }
+            }
+            if let Some(exe) = exe_candidate.as_deref() {
+                if let Some(saved) = save_exe_icon(exe) {
+                    return Some(saved);
+                }
+            }
+            if let Some(cover) = file_service.find_cover_image(game_dir) {
+                return save_image(&cover);
+            }
+        }
+        EngineType::RenPy => {
+            if let Some(exe) = exe_candidate.as_deref() {
+                if let Some(saved) = save_exe_icon(exe) {
+                    return Some(saved);
+                }
+            }
+            if let Some(cover) = file_service.find_cover_image(game_dir) {
+                return save_image(&cover);
+            }
+        }
+        EngineType::Other => {
+            if let Some(exe) = exe_candidate.as_deref() {
+                if let Some(saved) = save_exe_icon(exe) {
+                    return Some(saved);
+                }
+            }
+            if let Some(cover) = file_service.find_cover_image(game_dir) {
+                return save_image(&cover);
+            }
+        }
+    }
+
+    None
+}
+
+fn find_executable_for_icon(engine: EngineType, game_dir: &Path) -> Option<PathBuf> {
+    match engine {
+        EngineType::RpgMakerVX
+        | EngineType::RpgMakerVXAce
+        | EngineType::RpgMakerMV
+        | EngineType::RpgMakerMZ => find_executable_by_candidates(
+            game_dir,
+            &[
+                "Game.exe",
+                "Game",
+                "RPG_RT.exe",
+                "RPG_RT",
+                "nw.exe",
+                "nwjs.exe",
+            ],
+        )
+        .or_else(|| find_root_windows_exe(game_dir, &[])),
+        EngineType::RenPy => find_root_windows_exe(game_dir, &["renpy", "python"]),
+        EngineType::Other => find_root_windows_exe(game_dir, &[]),
+    }
+}
+
+fn find_executable_by_candidates(game_dir: &Path, candidates: &[&str]) -> Option<PathBuf> {
+    for candidate in candidates {
+        let path = game_dir.join(candidate);
+        if path.exists() && path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn find_root_windows_exe(game_dir: &Path, excluded: &[&str]) -> Option<PathBuf> {
+    let dir_name = game_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let mut fallback = None;
+
+    if let Ok(entries) = std::fs::read_dir(game_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if ext != "exe" {
+                continue;
+            }
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if excluded.iter().any(|e| *e == stem) {
+                continue;
+            }
+            if !dir_name.is_empty() && stem == dir_name {
+                return Some(path);
+            }
+            if fallback.is_none() {
+                fallback = Some(path);
+            }
+        }
+    }
+
+    fallback
+}
+
+fn resolve_entry_path_for_cover(game_path: &Path, entry_path: &str) -> Option<PathBuf> {
+    let entry = entry_path.trim();
+    if entry.is_empty() {
+        return None;
+    }
+
+    let candidate = PathBuf::from(entry);
+    let resolved = if candidate.is_absolute() {
+        candidate
+    } else {
+        game_path.join(entry)
+    };
+
+    if resolved.exists() && resolved.is_file() {
+        Some(resolved)
+    } else {
+        None
+    }
+}
+
+fn fill_cover_from_config(
+    file_service: &FileService,
+    root: &Path,
+    game: &Game,
+    mut dto: GameDto,
+) -> GameDto {
+    if dto.cover_path.is_some() {
+        return dto;
+    }
+
+    let config_path = file_service.game_config_path(root, &game.profile_key);
+    if !config_path.exists() {
+        return dto;
+    }
+
+    let config = match file_service.read_game_config(&config_path) {
+        Ok(config) => config,
+        Err(_) => return dto,
+    };
+    let cover_file = config.cover_file.unwrap_or_default();
+    if cover_file.trim().is_empty() {
+        return dto;
+    }
+
+    let profile_dir = file_service.game_profile_dir(root, &game.profile_key);
+    let cover_path = if Path::new(&cover_file).is_absolute() {
+        PathBuf::from(&cover_file)
+    } else {
+        profile_dir.join(&cover_file)
+    };
+
+    if cover_path.exists() {
+        dto.cover_path = Some(cover_path.to_string_lossy().to_string());
+    }
+
+    dto
 }
 
 /// 获取游戏设置（settings.toml）
@@ -356,10 +684,16 @@ pub async fn save_game_settings(
     }
 
     if let Some(cover_file) = config.cover_file.clone() {
+        let profile_dir = file_service.game_profile_dir(&root, &game.profile_key);
         let cover_path = if Path::new(&cover_file).is_absolute() {
-            PathBuf::from(cover_file)
+            PathBuf::from(&cover_file)
         } else {
-            PathBuf::from(&game.path).join(cover_file)
+            let in_profile = profile_dir.join(&cover_file);
+            if in_profile.exists() {
+                in_profile
+            } else {
+                PathBuf::from(&game.path).join(&cover_file)
+            }
         };
         if cover_path.exists() {
             if let Ok(saved) =
@@ -373,6 +707,50 @@ pub async fn save_game_settings(
     }
 
     file_service.write_game_config(&config_path, &config)
+}
+
+/// 重新提取图标/封面
+#[tauri::command]
+pub async fn refresh_game_cover(id: String, state: State<'_, AppState>) -> Result<GameDto, String> {
+    let service = state.game_service.lock().await;
+    let game = service
+        .get_game_by_id(&id)
+        .await?
+        .ok_or_else(|| format!("游戏不存在: {}", id))?;
+
+    let container_root = state.container_root.lock().await;
+    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    drop(container_root);
+
+    let file_service = FileService::new();
+    let config_path = file_service.game_config_path(&root, &game.profile_key);
+    let entry_exe = if config_path.exists() {
+        file_service
+            .read_game_config(&config_path)
+            .ok()
+            .and_then(|cfg| resolve_entry_path_for_cover(Path::new(&game.path), &cfg.entry_path))
+    } else {
+        None
+    };
+
+    let resolved_engine = normalize_engine_type(&game);
+    update_game_cover(
+        &service,
+        &file_service,
+        &root,
+        &game,
+        &resolved_engine,
+        Path::new(&game.path),
+        entry_exe.as_deref(),
+    )
+    .await;
+
+    let updated = service
+        .get_game_by_id(&id)
+        .await?
+        .ok_or_else(|| format!("游戏不存在: {}", id))?;
+
+    Ok(service.to_dto(updated))
 }
 
 /// 获取profile目录路径
@@ -659,6 +1037,8 @@ fn default_game_config(game: &Game) -> GameConfig {
         runtime_version: game.runtime_version.clone(),
         args: Vec::new(),
         sandbox_home: true,
+        use_bottles: false,
+        bottle_name: None,
         cover_file: None,
     }
 }

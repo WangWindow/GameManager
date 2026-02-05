@@ -28,7 +28,7 @@ interface Props {
 
 interface Emits {
   (e: 'update:open', value: boolean): void
-  (e: 'submit', payload: { path: string; engineType: string }): void
+  (e: 'submit', payload: { executablePath: string; engineType: string }): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -37,33 +37,33 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const path = ref('')
+const executablePath = ref('')
 const engineType = ref<string>(SUPPORTED_ENGINES[0])
 
 watch(
   () => props.open,
   (val) => {
     if (!val) {
-      path.value = ''
+      executablePath.value = ''
       engineType.value = SUPPORTED_ENGINES[0]
     }
   }
 )
 
-async function pickDirectory() {
+async function pickExecutable() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog')
-    const res = await open({ directory: true, multiple: false, title: '选择游戏目录' })
+    const res = await open({ multiple: false, title: '选择游戏可执行文件' })
     if (!res) return
-    path.value = Array.isArray(res) ? res[0] ?? '' : res
+    executablePath.value = Array.isArray(res) ? res[0] ?? '' : res
   } catch (e) {
-    console.error('选择目录失败:', e)
+    console.error('选择可执行文件失败:', e)
   }
 }
 
 function submit() {
-  if (!path.value) return
-  emit('submit', { path: path.value, engineType: engineType.value })
+  if (!executablePath.value) return
+  emit('submit', { executablePath: executablePath.value, engineType: engineType.value })
 }
 </script>
 
@@ -77,13 +77,14 @@ function submit() {
 
       <div class="space-y-4">
         <div class="space-y-2">
-          <label class="text-sm font-medium">游戏目录</label>
+          <label class="text-sm font-medium">可执行文件</label>
           <div class="flex gap-2">
-            <Input v-model="path" placeholder="选择游戏目录" />
-            <Button variant="secondary" class="px-3" @click="pickDirectory">
-              <Icon icon="ri:folder-line" class="h-4 w-4" />
+            <Input v-model="executablePath" placeholder="选择游戏可执行文件" />
+            <Button variant="secondary" class="px-3" @click="pickExecutable">
+              <Icon icon="ri:file-3-line" class="h-4 w-4" />
             </Button>
           </div>
+          <div class="text-xs text-muted-foreground">游戏目录将自动识别为可执行文件所在目录</div>
         </div>
 
         <div class="space-y-2">
@@ -103,7 +104,7 @@ function submit() {
 
       <DialogFooter>
         <Button variant="ghost" @click="emit('update:open', false)">取消</Button>
-        <Button :disabled="!path || loading" class="gap-2" @click="submit">
+        <Button :disabled="!executablePath || loading" class="gap-2" @click="submit">
           <Icon v-if="loading" icon="ri:loader-4-line" class="h-4 w-4 animate-spin" />
           导入
         </Button>

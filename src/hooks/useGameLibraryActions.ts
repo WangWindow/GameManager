@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
-import { importGameDir, scanGames, saveGameSettings, updateGame } from '@/lib/api'
+import { importGameDir, scanGames, saveGameSettings, updateGame, refreshGameCover } from '@/lib/api'
 import type { GameConfig } from '@/types'
 
 interface Options {
@@ -15,11 +15,11 @@ export function useGameLibraryActions(options: Options) {
   const importLoading = ref(false)
   const scanLoading = ref(false)
 
-  async function handleImportSubmit(payload: { path: string; engineType: string }) {
+  async function handleImportSubmit(payload: { executablePath: string; engineType: string }) {
     if (importLoading.value) return
     importLoading.value = true
     try {
-      await importGameDir(payload.path, payload.engineType)
+      await importGameDir(payload.executablePath, payload.engineType)
       toast.success('导入成功')
       options.closeImport()
       options.refresh()
@@ -73,5 +73,23 @@ export function useGameLibraryActions(options: Options) {
     }
   }
 
-  return { importLoading, scanLoading, handleImportSubmit, handleScanSubmit, handleGameSave }
+  async function handleRefreshCover(id: string) {
+    try {
+      await refreshGameCover(id)
+      toast.success('图标已更新')
+      options.refresh()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '图标更新失败'
+      toast.error(msg)
+    }
+  }
+
+  return {
+    importLoading,
+    scanLoading,
+    handleImportSubmit,
+    handleScanSubmit,
+    handleGameSave,
+    handleRefreshCover,
+  }
 }

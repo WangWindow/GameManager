@@ -19,6 +19,9 @@ import type {
   NwjsStableInfo,
   NwjsInstallResult,
   CleanupResult,
+  BottlesStatus,
+  SetDefaultBottleInput,
+  SetBottlesEnabledInput,
 } from '@/types'
 
 /**
@@ -78,10 +81,10 @@ export async function launchGame(id: string): Promise<LaunchResult> {
 }
 
 /**
- * 导入游戏目录
+ * 导入游戏（可执行文件路径）
  */
-export async function importGameDir(path: string, engineType: string): Promise<GameDto> {
-  return invoke<GameDto>('import_game_dir', { input: { path, engineType } })
+export async function importGameDir(executablePath: string, engineType: string): Promise<GameDto> {
+  return invoke<GameDto>('import_game_dir', { input: { executablePath, engineType } })
 }
 
 /**
@@ -103,6 +106,13 @@ export async function getGameSettings(id: string): Promise<GameConfig> {
  */
 export async function saveGameSettings(id: string, input: GameConfig): Promise<void> {
   return invoke<void>('save_game_settings', { id, input })
+}
+
+/**
+ * 重新提取图标/封面
+ */
+export async function refreshGameCover(id: string): Promise<GameDto> {
+  return invoke<GameDto>('refresh_game_cover', { id })
 }
 
 /**
@@ -185,6 +195,27 @@ export async function getAppSettings(): Promise<AppSettings> {
  */
 export async function setContainerRoot(input: SetContainerRootInput): Promise<void> {
   return invoke<void>('set_container_root', { input })
+}
+
+/**
+ * 获取 Bottles 状态
+ */
+export async function getBottlesStatus(): Promise<BottlesStatus> {
+  return invoke<BottlesStatus>('get_bottles_status')
+}
+
+/**
+ * 设置默认 Bottles bottle
+ */
+export async function setDefaultBottle(input: SetDefaultBottleInput): Promise<void> {
+  return invoke<void>('set_default_bottle', { input })
+}
+
+/**
+ * 启用/禁用 Bottles
+ */
+export async function setBottlesEnabled(input: SetBottlesEnabledInput): Promise<void> {
+  return invoke<void>('set_bottles_enabled', { input })
 }
 
 /**

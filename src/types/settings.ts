@@ -45,3 +45,21 @@ export interface NwjsInstallResult {
 export interface CleanupResult {
   deleted: number
 }
+
+/**
+ * Bottles 状态
+ */
+export interface BottlesStatus {
+  installed: boolean
+  enabled: boolean
+  bottles: string[]
+  defaultBottle?: string
+}
+
+export interface SetDefaultBottleInput {
+  defaultBottle?: string
+}
+
+export interface SetBottlesEnabledInput {
+  enabled: boolean
+}

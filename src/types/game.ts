@@ -100,6 +100,10 @@ export interface GameConfig {
   args: string[]
   /** 沙盒主目录 */
   sandboxHome: boolean
+  /** 使用 Bottles 运行（仅 Other） */
+  useBottles?: boolean
+  /** Bottles bottle 名称 */
+  bottleName?: string
   /** 封面文件名 */
   coverFile?: string
 }

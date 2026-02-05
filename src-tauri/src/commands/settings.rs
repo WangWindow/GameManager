@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::services::{EngineService, GameService, db, download::nwjs};
+use crate::services::{BottlesService, EngineService, GameService, db, download::nwjs};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -124,4 +124,59 @@ pub async fn cleanup_unused_containers(
     }
 
     Ok(CleanupResult { deleted })
+}
+
+/// 获取 Bottles 状态与列表
+#[tauri::command]
+pub async fn get_bottles_status(state: State<'_, SettingsState>) -> Result<BottlesStatus, String> {
+    let default_bottle = db::get_setting(&state.pool, SETTING_BOTTLES_DEFAULT)
+        .await?
+        .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
+    let enabled = db::get_setting(&state.pool, SETTING_BOTTLES_ENABLED)
+        .await?
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    let cli = BottlesService::detect_cli().await;
+    if let Some(cli) = cli {
+        let bottles = BottlesService::list_bottles(&cli).await.unwrap_or_default();
+        Ok(BottlesStatus {
+            installed: true,
+            enabled,
+            bottles,
+            default_bottle,
+        })
+    } else {
+        Ok(BottlesStatus {
+            installed: false,
+            enabled,
+            bottles: Vec::new(),
+            default_bottle,
+        })
+    }
+}
+
+/// 设置默认 Bottles bottle
+#[tauri::command]
+pub async fn set_default_bottle(
+    input: SetDefaultBottleInput,
+    state: State<'_, SettingsState>,
+) -> Result<(), String> {
+    if let Some(name) = input.default_bottle.clone() {
+        db::set_setting(&state.pool, SETTING_BOTTLES_DEFAULT, &name).await?;
+    } else {
+        db::set_setting(&state.pool, SETTING_BOTTLES_DEFAULT, "").await?;
+    }
+    Ok(())
+}
+
+/// 启用/禁用 Bottles
+#[tauri::command]
+pub async fn set_bottles_enabled(
+    input: SetBottlesEnabledInput,
+    state: State<'_, SettingsState>,
+) -> Result<(), String> {
+    let value = if input.enabled { "1" } else { "0" };
+    db::set_setting(&state.pool, SETTING_BOTTLES_ENABLED, value).await?;
+    Ok(())
 }

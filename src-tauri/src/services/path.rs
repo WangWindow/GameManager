@@ -1,3 +1,5 @@
+use pelite::pe32::Pe as Pe32;
+use pelite::pe64::Pe as Pe64;
 use std::path::{Path, PathBuf};
 
 /// 确保目录存在，不存在则创建
@@ -90,17 +92,27 @@ impl FileService {
             "cover.png",
             "cover.jpg",
             "cover.jpeg",
+            "cover.ico",
             "icon.png",
             "icon.jpg",
             "icon.jpeg",
+            "icon.ico",
             "icon/cover.png",
             "icons/cover.png",
+            "icon/cover.ico",
+            "icons/cover.ico",
             "icon/icon.png",
             "icons/icon.png",
+            "icon/icon.ico",
+            "icons/icon.ico",
             "www/icon/cover.png",
             "www/icons/cover.png",
+            "www/icon/cover.ico",
+            "www/icons/cover.ico",
             "www/icon/icon.png",
             "www/icons/icon.png",
+            "www/icon/icon.ico",
+            "www/icons/icon.ico",
         ];
 
         for candidate in &candidates {
@@ -112,6 +124,24 @@ impl FileService {
 
         // 尝试在icon目录中查找任何图片
         self.find_image_in_dirs(game_path, &["icon", "icons", "www/icon", "www/icons"])
+    }
+
+    /// 在icon目录中查找图片
+    pub fn find_icon_dir_image(&self, game_path: &Path) -> Option<PathBuf> {
+        self.find_image_in_dirs(game_path, &["icon", "icons", "www/icon", "www/icons"])
+    }
+
+    /// 从可执行文件提取图标并保存到profile目录
+    pub fn save_exe_icon_to_profile(
+        &self,
+        container_root: &Path,
+        profile_key: &str,
+        exe_path: &Path,
+    ) -> Option<PathBuf> {
+        let temp_dir = tempfile::tempdir().ok()?;
+        let extracted = self.extract_exe_icon_to_dir(exe_path, temp_dir.path())?;
+        self.save_cover_to_profile(container_root, profile_key, &extracted)
+            .ok()
     }
 
     /// 保存封面到profile目录并返回保存路径
@@ -165,11 +195,44 @@ impl FileService {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             matches!(
                 ext.to_lowercase().as_str(),
-                "png" | "jpg" | "jpeg" | "webp" | "bmp"
+                "png" | "jpg" | "jpeg" | "webp" | "bmp" | "ico"
             )
         } else {
             false
         }
+    }
+
+    fn extract_exe_icon_to_dir(&self, exe_path: &Path, out_dir: &Path) -> Option<PathBuf> {
+        let icon = self.extract_pe_icon(exe_path)?;
+        let target = out_dir.join("icon.ico");
+        std::fs::write(&target, icon).ok()?;
+        Some(target)
+    }
+
+    fn extract_pe_icon(&self, exe_path: &Path) -> Option<Vec<u8>> {
+        let file = pelite::FileMap::open(exe_path).ok()?;
+        let bytes = file.as_ref();
+
+        if let Ok(pe) = pelite::pe64::PeFile::from_bytes(bytes) {
+            return self.extract_pe_icon_from_resources(pe.resources().ok()?);
+        }
+
+        if let Ok(pe) = pelite::pe32::PeFile::from_bytes(bytes) {
+            return self.extract_pe_icon_from_resources(pe.resources().ok()?);
+        }
+
+        None
+    }
+
+    fn extract_pe_icon_from_resources(
+        &self,
+        res: pelite::resources::Resources<'_>,
+    ) -> Option<Vec<u8>> {
+        let mut icons = res.icons().filter_map(Result::ok);
+        let (_name, group) = icons.next()?;
+        let mut out = Vec::new();
+        group.write(&mut out).ok()?;
+        Some(out)
     }
 
     /// 读取游戏配置

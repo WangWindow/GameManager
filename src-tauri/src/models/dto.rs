@@ -42,8 +42,8 @@ pub struct AddGameInput {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportGameInput {
-    /// 游戏路径
-    pub path: String,
+    /// 可执行文件路径
+    pub executable_path: String,
     /// 引擎类型
     pub engine_type: String,
 }
@@ -147,4 +147,18 @@ pub struct ScanGamesResult {
 pub struct CleanupResult {
     /// 删除数量
     pub deleted: u32,
+}
+
+/// 设置默认 Bottles bottle 输入
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetDefaultBottleInput {
+    pub default_bottle: Option<String>,
+}
+
+/// 启用/禁用 Bottles
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBottlesEnabledInput {
+    pub enabled: bool,
 }

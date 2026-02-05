@@ -114,6 +114,12 @@ pub struct GameConfig {
     /// 是否启用沙盒主目录
     #[serde(default = "default_true")]
     pub sandbox_home: bool,
+    /// 是否使用 Bottles
+    #[serde(default)]
+    pub use_bottles: bool,
+    /// Bottles bottle 名称
+    #[serde(default)]
+    pub bottle_name: Option<String>,
     /// 封面图片文件名
     #[serde(default)]
     pub cover_file: Option<String>,
@@ -131,6 +137,8 @@ impl Default for GameConfig {
             runtime_version: None,
             args: Vec::new(),
             sandbox_home: true,
+            use_bottles: false,
+            bottle_name: None,
             cover_file: None,
         }
     }

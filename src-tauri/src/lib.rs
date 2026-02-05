@@ -130,6 +130,7 @@ pub fn run() {
                 game_service: Arc::new(Mutex::new(game_service)),
                 engine_service: Arc::new(Mutex::new(services::EngineService::new(pool.clone()))),
                 launcher_service: Arc::new(Mutex::new(launcher_service)),
+                pool: pool.clone(),
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
             });
 
@@ -161,6 +162,7 @@ pub fn run() {
             commands::scan_games,
             commands::get_game_settings,
             commands::save_game_settings,
+            commands::refresh_game_cover,
             commands::get_game_profile_dir,
             commands::open_path,
             // 引擎相关命令
@@ -173,6 +175,9 @@ pub fn run() {
             // 设置相关命令
             commands::get_app_settings,
             commands::set_container_root,
+            commands::get_bottles_status,
+            commands::set_default_bottle,
+            commands::set_bottles_enabled,
             commands::get_nwjs_stable_info,
             commands::download_nwjs_stable,
             commands::cleanup_unused_containers,

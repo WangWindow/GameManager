@@ -11,6 +11,8 @@ struct LaunchOptions {
     entry_path: Option<String>,
     args: Vec<String>,
     sandbox_home: bool,
+    use_bottles: bool,
+    bottle_name: Option<String>,
 }
 
 impl LauncherService {
@@ -154,6 +156,30 @@ impl LauncherService {
             .resolve_entry_path(game_path, options.entry_path.as_deref())
             .ok_or_else(|| "未配置入口文件".to_string())?;
 
+        if options.use_bottles {
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = entry_path;
+                return Err("Bottles 仅支持在 Linux 上运行".to_string());
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                use crate::services::BottlesService;
+                let cli = BottlesService::detect_cli_sync()
+                    .ok_or_else(|| "未检测到 Bottles CLI".to_string())?;
+                let bottle = options
+                    .bottle_name
+                    .clone()
+                    .ok_or_else(|| "未选择 Bottles bottle".to_string())?;
+                let program = entry_path.to_string_lossy().to_string();
+                if program.trim().is_empty() {
+                    return Err("入口程序为空".to_string());
+                }
+                return BottlesService::run_executable(&cli, &bottle, &program, &options.args);
+            }
+        }
+
         let mut cmd = Command::new(&entry_path);
         cmd.current_dir(game_path);
 
@@ -244,12 +270,16 @@ impl LauncherService {
                 },
                 args: config.args.clone(),
                 sandbox_home: config.sandbox_home,
+                use_bottles: config.use_bottles,
+                bottle_name: config.bottle_name.clone(),
             }
         } else {
             LaunchOptions {
                 entry_path: None,
                 args: Vec::new(),
                 sandbox_home: true,
+                use_bottles: false,
+                bottle_name: None,
             }
         }
     }
