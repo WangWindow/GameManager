@@ -1,6 +1,6 @@
 [package]
 name = "gamemanager"
-version = "0.3.0"
+version = "0.3.1"
 description = "A Tauri App for managing games"
 authors = ["choco2333 <choco2333@outlook.com>"]
 edition = "2024"
