@@ -61,7 +61,7 @@ const props = defineProps<{ search?: string }>()
       <Button v-if="isTauri" variant="ghost" size="icon" class="h-8 w-9" title="最大化/还原" @click="toggleMaximize">
         <Icon :icon="isMaximized ? 'ri:checkbox-multiple-blank-line' : 'ri:checkbox-blank-line'" class="h-4 w-4" />
       </Button>
-      <Button v-if="isTauri" variant="destructive" size="icon" class="h-8 w-9" title="关闭" @click="close">
+      <Button v-if="isTauri" variant="ghost" size="icon" class="h-8 w-9" title="关闭" @click="close">
         <Icon icon="ri:close-line" class="h-4 w-4" />
       </Button>
     </div>

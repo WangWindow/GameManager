@@ -19,9 +19,9 @@ import type {
   NwjsStableInfo,
   NwjsInstallResult,
   CleanupResult,
-  BottlesStatus,
-  SetDefaultBottleInput,
-  SetBottlesEnabledInput,
+  Capabilities,
+  IntegrationSettingsInput,
+  IntegrationStatus,
 } from '@/types'
 
 /**
@@ -198,24 +198,31 @@ export async function setContainerRoot(input: SetContainerRootInput): Promise<vo
 }
 
 /**
- * 获取 Bottles 状态
+ * 平台检测
  */
-export async function getBottlesStatus(): Promise<BottlesStatus> {
-  return invoke<BottlesStatus>('get_bottles_status')
+export async function getPlatform(): Promise<string> {
+  return invoke<string>('get_platform')
 }
 
 /**
- * 设置默认 Bottles bottle
+ * 获取能力列表
  */
-export async function setDefaultBottle(input: SetDefaultBottleInput): Promise<void> {
-  return invoke<void>('set_default_bottle', { input })
+export async function getCapabilities(): Promise<Capabilities> {
+  return invoke<Capabilities>('get_capabilities')
 }
 
 /**
- * 启用/禁用 Bottles
+ * 获取集成状态
  */
-export async function setBottlesEnabled(input: SetBottlesEnabledInput): Promise<void> {
-  return invoke<void>('set_bottles_enabled', { input })
+export async function getIntegrationStatus(key: string): Promise<IntegrationStatus> {
+  return invoke<IntegrationStatus>('get_integration_status', { key })
+}
+
+/**
+ * 更新集成设置
+ */
+export async function setIntegrationSettings(input: IntegrationSettingsInput): Promise<void> {
+  return invoke<void>('set_integration_settings', { input })
 }
 
 /**

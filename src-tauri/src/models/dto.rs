@@ -148,17 +148,3 @@ pub struct CleanupResult {
     /// 删除数量
     pub deleted: u32,
 }
-
-/// 设置默认 Bottles bottle 输入
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetDefaultBottleInput {
-    pub default_bottle: Option<String>,
-}
-
-/// 启用/禁用 Bottles
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetBottlesEnabledInput {
-    pub enabled: bool,
-}

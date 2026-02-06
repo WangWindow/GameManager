@@ -71,7 +71,7 @@ impl BottlesService {
         let cli_json = cli.clone();
         let output = tokio::task::spawn_blocking(move || {
             cli_json
-                .with_args_sync(&["--json", "list", "bottles"])
+                .with_args_sync(&["--json", "list", "bottles"]) // prefer json
                 .output()
         })
         .await
@@ -86,6 +86,7 @@ impl BottlesService {
             }
         }
 
+        // fallback to text mode
         let cli_text = cli.clone();
         let text_output = tokio::task::spawn_blocking(move || {
             cli_text.with_args_sync(&["list", "bottles"]).output()

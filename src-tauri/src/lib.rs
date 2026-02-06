@@ -175,9 +175,10 @@ pub fn run() {
             // 设置相关命令
             commands::get_app_settings,
             commands::set_container_root,
-            commands::get_bottles_status,
-            commands::set_default_bottle,
-            commands::set_bottles_enabled,
+            commands::get_platform,
+            commands::get_capabilities,
+            commands::get_integration_status,
+            commands::set_integration_settings,
             commands::get_nwjs_stable_info,
             commands::download_nwjs_stable,
             commands::cleanup_unused_containers,

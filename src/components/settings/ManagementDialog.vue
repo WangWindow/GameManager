@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { getBottlesStatus, getEngines, setBottlesEnabled, setDefaultBottle } from '@/lib/api'
+import { getEngines, getIntegrationStatus, setIntegrationSettings } from '@/lib/api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { EngineDto } from '@/types'
 
@@ -42,6 +42,7 @@ const emit = defineEmits<Emits>()
 const engines = ref<EngineDto[]>([])
 const loading = ref(false)
 const bottlesLoading = ref(false)
+const bottlesAvailable = ref(false)
 const bottlesInstalled = ref(false)
 const bottlesEnabled = ref(false)
 const bottlesList = ref<string[]>([])
@@ -62,12 +63,15 @@ async function fetchEngines() {
 async function fetchBottlesStatus() {
   bottlesLoading.value = true
   try {
-    const status = await getBottlesStatus()
-    bottlesInstalled.value = status.installed
+    const status = await getIntegrationStatus('bottles')
+    const options = status.options ?? {}
+    bottlesAvailable.value = status.available
+    bottlesInstalled.value = options.installed ?? status.available
     bottlesEnabled.value = status.enabled
-    bottlesList.value = status.bottles
-    defaultBottle.value = status.defaultBottle ?? ''
+    bottlesList.value = options.bottles ?? []
+    defaultBottle.value = options.defaultBottle ?? ''
   } catch (e) {
+    bottlesAvailable.value = false
     bottlesInstalled.value = false
     bottlesEnabled.value = false
     bottlesList.value = []
@@ -81,7 +85,7 @@ async function fetchBottlesStatus() {
 async function updateBottlesEnabled(value: boolean) {
   bottlesEnabled.value = value
   try {
-    await setBottlesEnabled({ enabled: value })
+    await setIntegrationSettings({ key: 'bottles', enabled: value })
   } catch (e) {
     console.error('设置 Bottles 启用状态失败:', e)
   }
@@ -90,7 +94,10 @@ async function updateBottlesEnabled(value: boolean) {
 async function updateDefaultBottle(value: string) {
   defaultBottle.value = value
   try {
-    await setDefaultBottle({ defaultBottle: value || undefined })
+    await setIntegrationSettings({
+      key: 'bottles',
+      options: { defaultBottle: value || '' },
+    })
   } catch (e) {
     console.error('设置默认 Bottle 失败:', e)
   }
@@ -181,7 +188,7 @@ watch(
 
           <Separator />
 
-          <div class="space-y-2">
+          <div v-if="bottlesAvailable" class="space-y-2">
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium">Bottles</div>
               <Button variant="ghost" size="sm" :disabled="bottlesLoading" @click="fetchBottlesStatus">

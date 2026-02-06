@@ -152,9 +152,13 @@ impl LauncherService {
         container_root: &Path,
         options: &LaunchOptions,
     ) -> Result<Child, String> {
-        let entry_path = self
-            .resolve_entry_path(game_path, options.entry_path.as_deref())
-            .ok_or_else(|| "未配置入口文件".to_string())?;
+        // 优先使用配置中的入口路径；若未配置则尝试从游戏目录自动识别可执行文件
+        let entry_path = match self.resolve_entry_path(game_path, options.entry_path.as_deref()) {
+            Some(p) => p,
+            None => self
+                .find_root_executable(game_path)
+                .ok_or_else(|| "未配置入口文件".to_string())?,
+        };
 
         if options.use_bottles {
             #[cfg(not(target_os = "linux"))]

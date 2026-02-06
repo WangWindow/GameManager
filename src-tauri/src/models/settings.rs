@@ -13,14 +13,39 @@ pub struct AppSettings {
     pub container_root: String,
 }
 
-/// Bottles 状态信息
+/// 集成选项（可扩展）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BottlesStatus {
-    pub installed: bool,
-    pub enabled: bool,
-    pub bottles: Vec<String>,
+pub struct IntegrationOptions {
+    pub installed: Option<bool>,
+    pub bottles: Option<Vec<String>>,
     pub default_bottle: Option<String>,
+}
+
+/// 集成状态信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationStatus {
+    pub key: String,
+    pub available: bool,
+    pub enabled: bool,
+    pub options: Option<IntegrationOptions>,
+}
+
+/// 能力列表
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Capabilities {
+    pub integrations: Vec<IntegrationStatus>,
+}
+
+/// 集成设置输入
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationSettingsInput {
+    pub key: String,
+    pub enabled: Option<bool>,
+    pub options: Option<IntegrationOptions>,
 }
 
 impl Default for AppSettings {

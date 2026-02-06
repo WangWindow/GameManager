@@ -47,19 +47,36 @@ export interface CleanupResult {
 }
 
 /**
- * Bottles 状态
+ * 集成选项（可扩展）
  */
-export interface BottlesStatus {
-  installed: boolean
-  enabled: boolean
-  bottles: string[]
+export interface IntegrationOptions {
+  installed?: boolean
+  bottles?: string[]
   defaultBottle?: string
 }
 
-export interface SetDefaultBottleInput {
-  defaultBottle?: string
+/**
+ * 集成状态
+ */
+export interface IntegrationStatus {
+  key: string
+  available: boolean
+  enabled: boolean
+  options?: IntegrationOptions
 }
 
-export interface SetBottlesEnabledInput {
-  enabled: boolean
+/**
+ * 能力列表
+ */
+export interface Capabilities {
+  integrations: IntegrationStatus[]
+}
+
+/**
+ * 集成设置输入
+ */
+export interface IntegrationSettingsInput {
+  key: string
+  enabled?: boolean
+  options?: IntegrationOptions
 }

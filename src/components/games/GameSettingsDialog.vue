@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { SUPPORTED_ENGINES, getEngineDisplayName } from '@/constants/engines'
-import { getBottlesStatus, getGameProfileDir, getGameSettings, openPath } from '@/lib/api'
+import { getGameProfileDir, getGameSettings, getIntegrationStatus, openPath } from '@/lib/api'
 import type { GameConfig, GameDto } from '@/types'
 import type { EngineType } from '@/types/engine'
 
@@ -56,6 +56,7 @@ const coverFile = ref('')
 const settingsLoading = ref(false)
 const settingsLoaded = ref(false)
 const bottlesLoading = ref(false)
+const bottlesAvailable = ref(false)
 const bottlesInstalled = ref(false)
 const bottlesEnabled = ref(false)
 const bottlesList = ref<string[]>([])
@@ -79,7 +80,7 @@ watch(
     engineType.value = game.engineType
     path.value = game.path
     runtimeVersion.value = game.runtimeVersion ?? ''
-    entryPath.value = game.path
+    entryPath.value = '' // 默认不回退为目录，等待设置加载
     argsText.value = ''
     sandboxHome.value = true
     coverFile.value = ''
@@ -97,7 +98,7 @@ watch(
     try {
       const config = await getGameSettings(props.game.id)
       engineType.value = config.engineType || props.game.engineType
-      entryPath.value = toAbsoluteEntryPath(config.entryPath || props.game.path)
+      entryPath.value = config.entryPath ? toAbsoluteEntryPath(config.entryPath) : ''
       runtimeVersion.value = config.runtimeVersion ?? props.game.runtimeVersion ?? ''
       argsText.value = (config.args ?? []).join(' ')
       sandboxHome.value = config.sandboxHome ?? true
@@ -135,7 +136,8 @@ function handleSave() {
 
   const resolvedEntryPath = toAbsoluteEntryPath(entryPath.value.trim() || path.value.trim())
 
-  const usingBottles = engineType.value === 'other' && bottlesEnabled.value && bottlesInstalled.value
+  const usingBottles =
+    engineType.value === 'other' && bottlesAvailable.value && bottlesEnabled.value && bottlesInstalled.value
 
   const settings: GameConfig = {
     engineType: engineType.value,
@@ -161,14 +163,25 @@ function handleSave() {
 async function refreshBottlesStatus() {
   if (!props.game) return
   if (engineType.value !== 'other') return
+
   bottlesLoading.value = true
   try {
-    const status = await getBottlesStatus()
-    bottlesInstalled.value = status.installed
+    const status = await getIntegrationStatus('bottles')
+    const options = status.options ?? {}
+    bottlesAvailable.value = status.available
+    if (!bottlesAvailable.value) {
+      bottlesInstalled.value = false
+      bottlesEnabled.value = false
+      bottlesList.value = []
+      defaultBottle.value = ''
+      return
+    }
+    bottlesInstalled.value = options.installed ?? status.available
     bottlesEnabled.value = status.enabled
-    bottlesList.value = status.bottles
-    defaultBottle.value = status.defaultBottle ?? ''
+    bottlesList.value = options.bottles ?? []
+    defaultBottle.value = options.defaultBottle ?? ''
   } catch (e) {
+    bottlesAvailable.value = false
     bottlesInstalled.value = false
     bottlesEnabled.value = false
     bottlesList.value = []
@@ -324,12 +337,13 @@ function handleRefreshCover() {
                   <Input v-model="entryPath" placeholder="如：Game.exe / launcher.sh" />
                   <Button variant="secondary" size="sm" @click="pickEntryFile">选择</Button>
                 </div>
-                <div v-if="engineType === 'other' && bottlesEnabled" class="text-xs text-muted-foreground">
+                <div v-if="engineType === 'other' && bottlesEnabled && bottlesAvailable"
+                  class="text-xs text-muted-foreground">
                   Bottles 启用时可填写程序名称（如：Bandizip）
                 </div>
               </div>
 
-              <div v-if="engineType === 'other'" class="space-y-2">
+              <div v-if="engineType === 'other' && bottlesAvailable" class="space-y-2">
                 <div class="text-sm font-medium">Bottles Bottle</div>
 
                 <div v-if="!bottlesInstalled" class="rounded-md border px-3 py-2 text-xs text-muted-foreground">
