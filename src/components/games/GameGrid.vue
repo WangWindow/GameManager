@@ -7,6 +7,7 @@ import type { GameDto } from '@/types'
 interface Props {
   games: GameDto[]
   loading?: boolean
+  viewMode: 'grid' | 'list'
 }
 
 interface Emits {
@@ -22,6 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const isEmpty = computed(() => !props.loading && props.games.length === 0)
+const isGrid = computed(() => props.viewMode === 'grid')
 </script>
 
 <template>
@@ -42,7 +44,7 @@ const isEmpty = computed(() => !props.loading && props.games.length === 0)
     </div>
 
     <!-- 游戏网格 -->
-    <div v-else-if="!isEmpty" class="space-y-3">
+    <div v-else-if="!isEmpty" :class="isGrid ? 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-3'">
       <GameCard v-for="game in games" :key="game.id" :game="game" @launch="emit('launch', game.id)"
         @edit="emit('edit', game.id)" @delete="emit('delete', game.id)" />
     </div>

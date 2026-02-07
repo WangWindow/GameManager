@@ -24,6 +24,7 @@ import type { EngineType } from '@/types/engine'
 interface Props {
   open: boolean
   loading?: boolean
+  initialExecutablePath?: string
 }
 
 interface Emits {
@@ -41,9 +42,12 @@ const executablePath = ref('')
 const engineType = ref<string>(SUPPORTED_ENGINES[0])
 
 watch(
-  () => props.open,
-  (val) => {
-    if (!val) {
+  () => [props.open, props.initialExecutablePath],
+  ([open, initialPath]) => {
+    if (open && initialPath && typeof initialPath === 'string') {
+      executablePath.value = initialPath
+    }
+    if (!open) {
       executablePath.value = ''
       engineType.value = SUPPORTED_ENGINES[0]
     }
