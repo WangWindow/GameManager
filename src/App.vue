@@ -52,6 +52,7 @@ const closeImportDialog = () => {
 const {
   importLoading,
   scanLoading,
+  saveLoading,
   handleImportSubmit,
   handleScanSubmit,
   handleGameSave,
@@ -282,8 +283,8 @@ async function confirmDeleteGame() {
       @submit="handleImportSubmit" />
     <ScanDialog v-model:open="scanOpen" :loading="scanLoading" @submit="handleScanSubmit" />
 
-    <GameSettingsDialog v-model:open="gameSettingsOpen" :game="selectedGame" @save="handleGameSave"
-      @refreshCover="handleRefreshCover" />
+    <GameSettingsDialog v-model:open="gameSettingsOpen" :game="selectedGame" :loading="saveLoading"
+      @save="handleGameSave" @refreshCover="handleRefreshCover" />
 
     <ManagementDialog v-model:open="manageOpen" :show-status-bar="showStatusBar"
       @update:showStatusBar="(v) => (showStatusBar = v)" @downloadNwjs="handleDownloadNwjs"
@@ -321,6 +322,6 @@ async function confirmDeleteGame() {
       </div>
     </div>
 
-    <Toaster position="top-right" />
+    <Toaster position="bottom-right" />
   </div>
 </template>

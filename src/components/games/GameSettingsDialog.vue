@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Icon } from '@iconify/vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -27,6 +28,7 @@ import type { EngineType } from '@/types/engine'
 interface Props {
   open: boolean
   game: GameDto | null
+  loading?: boolean
 }
 
 interface Emits {
@@ -42,7 +44,7 @@ interface Emits {
   (e: 'refreshCover', id: string): void
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { loading: false })
 const emit = defineEmits<Emits>()
 
 const title = ref('')
@@ -386,7 +388,10 @@ function handleRefreshCover() {
 
       <DialogFooter>
         <Button variant="ghost" @click="emit('update:open', false)">取消</Button>
-        <Button :disabled="!canSave" @click="handleSave">保存</Button>
+        <Button :disabled="!canSave || props.loading" class="gap-2" @click="handleSave">
+          <Icon v-if="props.loading" icon="ri:loader-4-line" class="h-4 w-4 animate-spin" />
+          保存
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

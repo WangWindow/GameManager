@@ -14,6 +14,7 @@ interface Options {
 export function useGameLibraryActions(options: Options) {
   const importLoading = ref(false)
   const scanLoading = ref(false)
+  const saveLoading = ref(false)
 
   async function handleImportSubmit(payload: { executablePath: string; engineType: string }) {
     if (importLoading.value) return
@@ -25,7 +26,12 @@ export function useGameLibraryActions(options: Options) {
       options.refresh()
     } catch (e) {
       const msg = e instanceof Error ? e.message : '导入失败'
-      toast.error(msg)
+      // 如果是已存在的错误，展示明确提示而不是泛泛的导入失败
+      if (typeof msg === 'string' && msg.includes('已存在')) {
+        toast.error('该游戏已存在')
+      } else {
+        toast.error(msg)
+      }
     } finally {
       importLoading.value = false
     }
@@ -56,6 +62,8 @@ export function useGameLibraryActions(options: Options) {
     runtimeVersion?: string
     settings: GameConfig
   }) {
+    if (saveLoading.value) return
+    saveLoading.value = true
     try {
       await updateGame(payload.id, {
         title: payload.title,
@@ -70,6 +78,8 @@ export function useGameLibraryActions(options: Options) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : '保存失败'
       toast.error(msg)
+    } finally {
+      saveLoading.value = false
     }
   }
 
@@ -87,6 +97,7 @@ export function useGameLibraryActions(options: Options) {
   return {
     importLoading,
     scanLoading,
+    saveLoading,
     handleImportSubmit,
     handleScanSubmit,
     handleGameSave,

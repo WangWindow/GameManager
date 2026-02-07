@@ -42,15 +42,61 @@ impl GameService {
 
         Ok(game)
     }
+    /// 根据路径获取游戏（path 必须为规范化目录路径）
+    pub async fn get_game_by_path(&self, path: &str) -> Result<Option<Game>, String> {
+        // 先尝试精确匹配
+        let game = sqlx::query_as::<_, Game>(
+            "SELECT id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at
+             FROM games WHERE path = ?"
+        )
+        .bind(path)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| format!("查询游戏失败: {}", e))?;
 
+        if game.is_some() {
+            return Ok(game);
+        }
+
+        // 如果未找到，做一次归一化比较以兼容旧数据
+        let normalized_input = crate::services::path::canonicalize_path(std::path::Path::new(path))
+            .to_string_lossy()
+            .to_string();
+
+        let all_games = sqlx::query_as::<_, Game>(
+            "SELECT id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at FROM games"
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| format!("查询游戏失败: {}", e))?;
+
+        for g in all_games {
+            let g_norm = crate::services::path::canonicalize_path(std::path::Path::new(&g.path))
+                .to_string_lossy()
+                .to_string();
+            if g_norm == normalized_input {
+                return Ok(Some(g));
+            }
+        }
+
+        Ok(None)
+    }
     /// 添加新游戏
     pub async fn add_game(&self, input: AddGameInput) -> Result<Game, String> {
+        // 规范化路径并检查是否已存在（按路径）
+        let normalized_path = crate::services::path::canonicalize_path(Path::new(&input.path))
+            .to_string_lossy()
+            .to_string();
+        if let Ok(Some(_)) = self.get_game_by_path(&normalized_path).await {
+            return Err("游戏已存在".to_string());
+        }
+
         // 生成游戏ID
         let id = Uuid::new_v4().to_string();
 
         // 如果没有提供标题，从路径提取
         let title = input.title.unwrap_or_else(|| {
-            Path::new(&input.path)
+            Path::new(&normalized_path)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("未命名游戏")
@@ -67,7 +113,7 @@ impl GameService {
             profile_key,
             title,
             engine_type,
-            input.path,
+            normalized_path,
             input.runtime_version,
         );
 
@@ -108,7 +154,16 @@ impl GameService {
             game.engine_type = engine_type;
         }
         if let Some(path) = input.path {
-            game.path = path;
+            // 规范化并保存路径，并检查冲突
+            let normalized = crate::services::path::canonicalize_path(Path::new(&path))
+                .to_string_lossy()
+                .to_string();
+            if let Ok(Some(existing)) = self.get_game_by_path(&normalized).await {
+                if existing.id != game.id {
+                    return Err("目标路径已被其它游戏占用".to_string());
+                }
+            }
+            game.path = normalized;
         }
         if let Some(runtime_version) = input.runtime_version {
             game.runtime_version = Some(runtime_version);

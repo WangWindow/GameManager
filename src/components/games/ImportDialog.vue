@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { SUPPORTED_ENGINES, getEngineDisplayName } from '@/constants/engines'
-import type { EngineType } from '@/types/engine'
+import { EngineType } from '@/types/engine'
 
 interface Props {
   open: boolean
@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const executablePath = ref('')
-const engineType = ref<string>(SUPPORTED_ENGINES[0])
+const engineType = ref<string>(EngineType.Other)
 
 watch(
   () => [props.open, props.initialExecutablePath],
@@ -49,7 +49,7 @@ watch(
     }
     if (!open) {
       executablePath.value = ''
-      engineType.value = SUPPORTED_ENGINES[0]
+      engineType.value = EngineType.Other
     }
   }
 )

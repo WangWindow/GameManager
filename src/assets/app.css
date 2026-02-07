@@ -145,3 +145,64 @@
   color: oklch(0.98 0 0);
   border-color: oklch(0.6 0.2 27);
 }
+
+/* Compact corner-style toasts (small floating cards in the corner) */
+.toaster {
+  position: fixed;
+  /* float above the content */
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  align-items: flex-end;
+  /* keep toasts aligned to the corner */
+  pointer-events: none;
+  /* allow clicks to pass through except on the toast itself */
+}
+
+.toaster [data-sonner-toast] {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.6rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  width: auto;
+  max-width: 320px;
+  border: 1px solid var(--normal-border);
+  background: var(--normal-bg);
+  color: var(--normal-text);
+  font-size: 0.9rem;
+}
+
+/* Make the toast icon slightly smaller and vertically centered */
+.toaster [data-sonner-toast] svg,
+.toaster [data-sonner-toast] .size-4 {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Slight entrance/exit animations for a nicer feeling */
+.toaster [data-sonner-toast] {
+  transform-origin: bottom right;
+  transition: transform 160ms cubic-bezier(.2, .9, .2, 1), opacity 160ms ease;
+}
+
+.toaster [data-sonner-toast][data-state="entering"] {
+  transform: translateY(4px) scale(.98);
+  opacity: 0;
+}
+
+.toaster [data-sonner-toast][data-state="entered"] {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.toaster [data-sonner-toast][data-state="leaving"] {
+  transform: translateY(6px) scale(.98);
+  opacity: 0;
+}
