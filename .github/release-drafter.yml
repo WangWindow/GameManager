@@ -1,0 +1,50 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+change-template: |
+  - $TITLE · @$AUTHOR (#$NUMBER)
+    $BODY
+change-title-escapes: "<*_&"
+sort-by: "merged_at"
+sort-direction: "descending"
+version-resolver:
+  default: patch
+categories:
+  - title: "✨ Highlights"
+    labels:
+      - "highlight"
+  - title: "⚡ Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "🐛 Fixes"
+    labels:
+      - "fix"
+      - "bug"
+  - title: "💥 Breaking Changes"
+    labels:
+      - "major"
+  - title: "🔧 Maintenance"
+    labels:
+      - "chore"
+      - "refactor"
+      - "docs"
+      - "build"
+      - "ci"
+  - title: "📝 Other Changes"
+    labels:
+      - "other"
+      - "misc"
+exclude-labels:
+  - "skip-changelog"
+  - "release"
+template: |
+  ## TL;DR
+  A short summary of notable updates — see **Highlights** below.
+
+  ## Changes
+  $CHANGES
+
+  ## Contributors
+  $CONTRIBUTORS
+
+  **Full changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
