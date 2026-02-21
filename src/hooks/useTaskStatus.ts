@@ -1,25 +1,25 @@
-import { computed, ref } from 'vue'
-import type { TaskStatus } from '@/types'
+import { useState, useMemo, useRef } from "react";
+import type { TaskStatus } from "@/types";
 
 export function useTaskStatus() {
-  const currentTask = ref<TaskStatus | null>(null)
-  let taskClearTimer: number | null = null
+  const [currentTask, setCurrentTask] = useState<TaskStatus | null>(null);
+  const taskClearTimerRef = useRef<number | null>(null);
 
   function updateTask(label: string, progress: number) {
-    if (taskClearTimer) {
-      window.clearTimeout(taskClearTimer)
-      taskClearTimer = null
+    if (taskClearTimerRef.current) {
+      window.clearTimeout(taskClearTimerRef.current);
+      taskClearTimerRef.current = null;
     }
-    const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0))
-    currentTask.value = { label, progress: safeProgress }
+    const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+    setCurrentTask({ label, progress: safeProgress });
     if (safeProgress >= 100) {
-      taskClearTimer = window.setTimeout(() => {
-        currentTask.value = null
-      }, 1200)
+      taskClearTimerRef.current = window.setTimeout(() => {
+        setCurrentTask(null);
+      }, 1200);
     }
   }
 
-  const statusBarVisible = computed(() => currentTask.value !== null)
+  const statusBarVisible = useMemo(() => currentTask !== null, [currentTask]);
 
-  return { currentTask, statusBarVisible, updateTask }
+  return { currentTask, statusBarVisible, updateTask };
 }

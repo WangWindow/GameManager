@@ -1,15 +1,16 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { useEffect, useState, useRef } from "react";
 
 export function useWindowControls() {
-  const isTauri = ref(false)
-  const isMaximized = ref(false)
-  let win: any | null = null
-  let unlistenResize: (() => void) | null = null
+  const [isTauri, setIsTauri] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const winRef = useRef<any | null>(null);
+  const unlistenResizeRef = useRef<(() => void) | null>(null);
 
   async function syncMaximized() {
-    if (!win || typeof win.isMaximized !== 'function') return
+    const win = winRef.current;
+    if (!win || typeof win.isMaximized !== "function") return;
     try {
-      isMaximized.value = Boolean(await win.isMaximized())
+      setIsMaximized(Boolean(await win.isMaximized()));
     } catch {
       // ignore
     }
@@ -17,78 +18,74 @@ export function useWindowControls() {
 
   async function init() {
     try {
-      // 中文说明：优先使用 Window API，失败再退回 WebviewWindow。
       try {
-        const mod = await import('@tauri-apps/api/window')
-        win = mod.getCurrentWindow()
+        const mod = await import("@tauri-apps/api/window");
+        winRef.current = mod.getCurrentWindow();
       } catch {
-        const mod = await import('@tauri-apps/api/webviewWindow')
-        win = mod.getCurrentWebviewWindow()
+        const mod = await import("@tauri-apps/api/webviewWindow");
+        winRef.current = mod.getCurrentWebviewWindow();
       }
 
-      isTauri.value = true
-      await syncMaximized()
+      setIsTauri(true);
+      await syncMaximized();
 
-      // 中文说明：尽量保持最大化状态同步（用于切换图标）。
-      if (win && typeof win.onResized === 'function') {
-        unlistenResize = await win.onResized(() => {
-          void syncMaximized()
-        })
+      const win = winRef.current;
+      if (win && typeof win.onResized === "function") {
+        unlistenResizeRef.current = await win.onResized(() => {
+          void syncMaximized();
+        });
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[window] init failed', err)
-      isTauri.value = false
-      win = null
+      console.error("[window] init failed", err);
+      setIsTauri(false);
+      winRef.current = null;
     }
   }
 
   async function minimize() {
-    if (!win) return
+    const win = winRef.current;
+    if (!win) return;
     try {
-      await win.minimize()
+      await win.minimize();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[window] minimize failed', err)
+      console.error("[window] minimize failed", err);
     }
   }
 
   async function toggleMaximize() {
-    if (!win) return
+    const win = winRef.current;
+    if (!win) return;
     try {
-      // 中文说明：不要调用 toggleMaximize（它需要额外 capability: core:window:allow-toggle-maximize）。
-      // 我们用 maximize/unmaximize 组合即可（已经在 capabilities 里允许）。
-      const max = await win.isMaximized()
-      await (max ? win.unmaximize() : win.maximize())
-      await syncMaximized()
+      const max = await win.isMaximized();
+      await (max ? win.unmaximize() : win.maximize());
+      await syncMaximized();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[window] toggleMaximize failed', err)
+      console.error("[window] toggleMaximize failed", err);
     }
   }
 
   async function close() {
-    if (!win) return
+    const win = winRef.current;
+    if (!win) return;
     try {
-      await win.close()
+      await win.close();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[window] close failed', err)
+      console.error("[window] close failed", err);
     }
   }
 
-  onMounted(() => {
-    void init()
-  })
-
-  onUnmounted(() => {
-    try {
-      unlistenResize?.()
-    } catch {
-      // ignore
-    }
-    unlistenResize = null
-  })
+  useEffect(() => {
+    void init();
+    return () => {
+      try {
+        unlistenResizeRef.current?.();
+      } catch {
+        // ignore
+      }
+      unlistenResizeRef.current = null;
+    };
+  }, []);
 
   return {
     isTauri,
@@ -96,5 +93,5 @@ export function useWindowControls() {
     minimize,
     toggleMaximize,
     close,
-  }
+  };
 }

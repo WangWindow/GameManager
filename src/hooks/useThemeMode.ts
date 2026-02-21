@@ -1,48 +1,44 @@
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useEffect, useState } from "react";
 
-export type ThemeMode = 'system' | 'light' | 'dark'
+export type ThemeMode = "system" | "light" | "dark";
 
 export function useThemeMode() {
-  const themeMode = ref<ThemeMode>('system')
-  const systemDark = ref(false)
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [systemDark, setSystemDark] = useState(false);
 
   function applyTheme(mode: ThemeMode) {
-    const root = document.documentElement
-    const isDark = mode === 'dark' || (mode === 'system' && systemDark.value)
+    const root = document.documentElement;
+    const isDark = mode === "dark" || (mode === "system" && systemDark);
     if (isDark) {
-      root.classList.add('dark')
+      root.classList.add("dark");
     } else {
-      root.classList.remove('dark')
+      root.classList.remove("dark");
     }
   }
 
-  watch(
-    themeMode,
-    (val) => {
-      localStorage.setItem('gm_theme', val)
-      applyTheme(val)
-    },
-    { immediate: true }
-  )
+  useEffect(() => {
+    localStorage.setItem("gm_theme", themeMode);
+    applyTheme(themeMode);
+  }, [themeMode, systemDark]);
 
-  onMounted(() => {
-    const theme = localStorage.getItem('gm_theme') as ThemeMode | null
-    if (theme) themeMode.value = theme
+  useEffect(() => {
+    const theme = localStorage.getItem("gm_theme") as ThemeMode | null;
+    if (theme) setThemeMode(theme);
 
     try {
-      const media = window.matchMedia('(prefers-color-scheme: dark)')
-      systemDark.value = media.matches
-      applyTheme(themeMode.value)
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      setSystemDark(media.matches);
+      applyTheme(themeMode);
       const handler = (e: MediaQueryListEvent) => {
-        systemDark.value = e.matches
-        if (themeMode.value === 'system') applyTheme('system')
-      }
-      media.addEventListener('change', handler)
-      onUnmounted(() => media.removeEventListener('change', handler))
+        setSystemDark(e.matches);
+        if (themeMode === "system") applyTheme("system");
+      };
+      media.addEventListener("change", handler);
+      return () => media.removeEventListener("change", handler);
     } catch {
       // ignore
     }
-  })
+  }, []);
 
-  return { themeMode }
+  return { themeMode, setThemeMode };
 }

@@ -1,117 +1,102 @@
-/**
- * 游戏管理 Composable
- */
-import { ref, computed } from 'vue'
-import { getGames, addGame, updateGame, deleteGame, launchGame } from '@/lib/api'
-import type { GameDto, AddGameInput, UpdateGameInput } from '@/types'
+import { useState, useCallback } from "react";
+import { getGames, addGame, updateGame, deleteGame, launchGame } from "@/lib/api";
+import type { GameDto, AddGameInput, UpdateGameInput } from "@/types";
 
 export function useGames() {
-  const games = ref<GameDto[]>([])
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  const [games, setGames] = useState<GameDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  /**
-   * 获取游戏列表
-   */
-  async function fetchGames() {
-    loading.value = true
-    error.value = null
+  const fetchGames = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      games.value = await getGames()
+      const data = await getGames();
+      setGames(data);
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '获取游戏列表失败'
-      console.error('获取游戏列表失败:', e)
+      const msg = e instanceof Error ? e.message : "获取游戏列表失败";
+      setError(msg);
+      console.error("获取游戏列表失败:", e);
     } finally {
-      loading.value = false
+      setLoading(false);
     }
-  }
+  }, []);
 
-  /**
-   * 添加游戏
-   */
-  async function handleAddGame(input: AddGameInput): Promise<boolean> {
-    loading.value = true
-    error.value = null
+  const handleAddGame = useCallback(async (input: AddGameInput): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
     try {
-      const newGame = await addGame(input)
-      games.value.push(newGame)
-      return true
+      const newGame = await addGame(input);
+      setGames((prev) => [...prev, newGame]);
+      return true;
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '添加游戏失败'
-      console.error('添加游戏失败:', e)
-      return false
+      const msg = e instanceof Error ? e.message : "添加游戏失败";
+      setError(msg);
+      console.error("添加游戏失败:", e);
+      return false;
     } finally {
-      loading.value = false
+      setLoading(false);
     }
-  }
+  }, []);
 
-  /**
-   * 更新游戏
-   */
-  async function handleUpdateGame(id: string, input: UpdateGameInput): Promise<boolean> {
-    loading.value = true
-    error.value = null
-    try {
-      const updatedGame = await updateGame(id, input)
-      const index = games.value.findIndex(g => g.id === id)
-      if (index !== -1) {
-        games.value[index] = updatedGame
+  const handleUpdateGame = useCallback(
+    async (id: string, input: UpdateGameInput): Promise<boolean> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const updatedGame = await updateGame(id, input);
+        setGames((prev) => prev.map((g) => (g.id === id ? updatedGame : g)));
+        return true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "更新游戏失败";
+        setError(msg);
+        console.error("更新游戏失败:", e);
+        return false;
+      } finally {
+        setLoading(false);
       }
-      return true
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : '更新游戏失败'
-      console.error('更新游戏失败:', e)
-      return false
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+    [],
+  );
 
-  /**
-   * 删除游戏
-   */
-  async function handleDeleteGame(id: string): Promise<boolean> {
-    loading.value = true
-    error.value = null
+  const handleDeleteGame = useCallback(async (id: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
     try {
-      await deleteGame(id)
-      games.value = games.value.filter(g => g.id !== id)
-      return true
+      await deleteGame(id);
+      setGames((prev) => prev.filter((g) => g.id !== id));
+      return true;
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '删除游戏失败'
-      console.error('删除游戏失败:', e)
-      return false
+      const msg = e instanceof Error ? e.message : "删除游戏失败";
+      setError(msg);
+      console.error("删除游戏失败:", e);
+      return false;
     } finally {
-      loading.value = false
+      setLoading(false);
     }
-  }
+  }, []);
 
-  /**
-   * 启动游戏
-   */
-  async function handleLaunchGame(id: string): Promise<boolean> {
-    loading.value = true
-    error.value = null
+  const handleLaunchGame = useCallback(async (id: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
     try {
-      await launchGame(id)
-      // 刷新游戏列表以更新最后游玩时间
-      await fetchGames()
-      return true
+      await launchGame(id);
+      await fetchGames();
+      return true;
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '启动游戏失败'
-      console.error('启动游戏失败:', e)
-      return false
+      const msg = e instanceof Error ? e.message : "启动游戏失败";
+      setError(msg);
+      console.error("启动游戏失败:", e);
+      return false;
     } finally {
-      loading.value = false
+      setLoading(false);
     }
-  }
+  }, [fetchGames]);
 
-  /**
-   * 根据ID获取游戏
-   */
-  function getGameById(id: string) {
-    return computed(() => games.value.find(g => g.id === id))
-  }
+  const getGameById = useCallback(
+    (id: string) => games.find((g) => g.id === id) ?? null,
+    [games],
+  );
 
   return {
     games,
@@ -123,5 +108,5 @@ export function useGames() {
     handleDeleteGame,
     handleLaunchGame,
     getGameById,
-  }
+  };
 }
