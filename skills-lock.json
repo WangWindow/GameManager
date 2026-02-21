@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "skills": {
+    "coding-agent": {
+      "source": "openclaw/openclaw",
+      "sourceType": "github",
+      "computedHash": "8f668cf6bc989191e89d84e6dd49076f8b1c84d2ccae29a16bd211c62774ca2e"
+    },
+    "documentation-lookup": {
+      "source": "upstash/context7",
+      "sourceType": "github",
+      "computedHash": "eb5e668b7575567d3252382d52320d69867e18df968695c946af066ffa686bad"
+    },
+    "extract-errors": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "b088123d854e6e3c57ab74746bce30c9231daec33dc73782ac57d7b3121519bc"
+    },
+    "feature-flags": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "c5335a86f91e81ce4e7035ab48209a4dbb09ef32822796d4778388472f0b0b39"
+    },
+    "fix": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "d68147149e12e8358926a58ef51b25d88a1e889233284c5ad849e1ee2b521206"
+    },
+    "flags": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "de69ba8631439d952ce7148c7d438a9de1e6387e7ecd2680b8d406ed31f64e9e"
+    },
+    "flow": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "3358c67bbdee529ceb49a37f260fab3cb507be2dfbdedd073295fcae7f16bc7e"
+    },
+    "gh-issues": {
+      "source": "openclaw/openclaw",
+      "sourceType": "github",
+      "computedHash": "3f06130ae1cdc25648f6e9f9f3eed8108152eae01e24aa2d8543f164a389bb22"
+    },
+    "github": {
+      "source": "openclaw/openclaw",
+      "sourceType": "github",
+      "computedHash": "78c25ef4dbe70f5ec149b7a5d55aadd4b2cb1aa6246c0cfcea66d316bdb5b171"
+    },
+    "session-logs": {
+      "source": "openclaw/openclaw",
+      "sourceType": "github",
+      "computedHash": "66226da5840d5e85c69ffcdad29c7bf23c260fbbcf3782e663d791500899e2f4"
+    },
+    "tauri-development": {
+      "source": "robinebers/openusage",
+      "sourceType": "github",
+      "computedHash": "0edb30d9211bebab653e1ced97835c77f5efd7bfe2922550ec52c47a6fa09ff9"
+    },
+    "tauri-v2": {
+      "source": "robinebers/openusage",
+      "sourceType": "github",
+      "computedHash": "1db1e63a480f53c3c86dae21d1cfc7eac3888e7e55e214084e58a1f16ce4d571"
+    },
+    "test": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "14fabeabacc8be3ea52f7dc209f45d132b2a81d4bdf2a67a73687865594a4d76"
+    },
+    "ui-components": {
+      "source": "elie222/inbox-zero",
+      "sourceType": "github",
+      "computedHash": "6cb241eead2f0760bf474fe1cada757ec0b59bd4d0dad72715bd0d8e44fed615"
+    },
+    "verify": {
+      "source": "facebook/react",
+      "sourceType": "github",
+      "computedHash": "f8b0daa5cb09d875140d1b9fa0440d969506dfba4365a5b40ef1c4d5f4b59112"
+    }
+  }
+}
