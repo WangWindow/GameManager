@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # 获取完整历史以进行比较
 
       - name: Install Tauri dependencies
         run: |
@@ -55,17 +57,44 @@ jobs:
             src-tauri -> target
 
       - name: Build Tauri app
-        run: bun run tauri build
+        run: |
+          set -e
+          bun run tauri build
 
       - name: Draft release notes
         id: release_drafter
         uses: release-drafter/release-drafter@v6
         with:
-          publish: true
-          tag: ${{ github.ref_name }}
+          publish: false
           name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate commit log between last tag and current
+        id: commitlog
+        run: |
+          set -e
+          # 获取上一个标签的名称
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+
+          # 如果存在上一个标签，则比较；否则列出所有提交
+          if [ "$LAST_TAG" != "$(git rev-list --max-parents=0 HEAD)" ]; then
+              COMMIT_RANGE="$LAST_TAG..HEAD"
+          else
+              # 如果没有上一个标签，则从第一个提交开始
+              COMMIT_RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+          fi
+
+          echo "Generating log for commits in range: $COMMIT_RANGE"
+
+          # 生成格式化的提交日志
+          git log $COMMIT_RANGE --pretty=format:'- %h %s (%an <%ae>)' > commitlog.txt
+
+          # 将日志内容作为输出，以便在后续步骤中使用
+          LOG_CONTENT=$(cat commitlog.txt)
+          # 为了防止换行符被破坏，使用 printf 和 %q 进行转义
+          printf -v escaped_log '%q' "$LOG_CONTENT"
+          echo "log=$escaped_log" >> $GITHUB_OUTPUT
 
       - name: List Tauri bundles
         run: ls -lh src-tauri/target/release/bundle
@@ -86,11 +115,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: false
-          body: ${{ steps.release_drafter.outputs.body }}
+          body: |
+            ${{ steps.release_drafter.outputs.body }}
+
+            ## Commits
+            <!-- The following commit log is generated automatically -->
+            ${{ fromJSON(format('"{0}"', steps.commitlog.outputs.log)) }}
+
+            <!-- Note: The commit list above includes all commits between the last tag and this release. -->
           files: |
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.rpm
             src-tauri/target/release/bundle/**/*.zip
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
