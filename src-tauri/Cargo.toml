@@ -2,7 +2,7 @@
 name = "gamemanager"
 version = "0.4.1"
 description = "A Tauri App for managing games"
-authors = ["choco2333 <choco2333@outlook.com>"]
+authors = ["WangWindow <1598593280@qq.com>"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -35,7 +35,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-toml = "0.9"
+toml = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 sqlx = { version = "0.8", features = [
     "sqlite",
@@ -48,7 +48,7 @@ reqwest = { version = "0.13", default-features = true, features = [
     "gzip",
 ] }
 futures-util = "0.3"
-zip = { version = "7", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 tar = "0.4"
 flate2 = "1"
 tempfile = "3"
