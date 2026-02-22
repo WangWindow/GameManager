@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # 获取完整历史以进行比较
+          fetch-depth: 0
 
       - name: Install Tauri dependencies
         run: |
@@ -87,14 +87,16 @@ jobs:
 
           echo "Generating log for commits in range: $COMMIT_RANGE"
 
-          # 生成格式化的提交日志
-          git log $COMMIT_RANGE --pretty=format:'- %h %s (%an <%ae>)' > commitlog.txt
+          # 生成格式化的提交日志并直接存入 GITHUB_OUTPUT，避免复杂的转义
+          LOG_CONTENT=$(git log $COMMIT_RANGE --pretty=format:'- %h %s (%an <%ae>)')
+          # 使用 echo 的 -E 选项并配合 tr 来确保换行符被正确处理
+          # 然后通过 echo 命令将内容写入 GITHUB_OUTPUT
+          {
+            echo "log<<EOF"
+            echo "$LOG_CONTENT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
-          # 将日志内容作为输出，以便在后续步骤中使用
-          LOG_CONTENT=$(cat commitlog.txt)
-          # 为了防止换行符被破坏，使用 printf 和 %q 进行转义
-          printf -v escaped_log '%q' "$LOG_CONTENT"
-          echo "log=$escaped_log" >> $GITHUB_OUTPUT
 
       - name: List Tauri bundles
         run: ls -lh src-tauri/target/release/bundle
@@ -119,8 +121,7 @@ jobs:
             ${{ steps.release_drafter.outputs.body }}
 
             ## Commits
-            <!-- The following commit log is generated automatically -->
-            ${{ fromJSON(format('"{0}"', steps.commitlog.outputs.log)) }}
+            ${{ steps.commitlog.outputs.log }}
 
             <!-- Note: The commit list above includes all commits between the last tag and this release. -->
           files: |
