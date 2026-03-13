@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n";
 
 interface ScanDialogProps {
   open: boolean;
@@ -24,6 +25,7 @@ export default function ScanDialog({
   onOpenChange,
   onSubmit,
 }: ScanDialogProps) {
+  const { t } = useI18n();
   const [root, setRoot] = useState("");
   const [maxDepth, setMaxDepth] = useState(3);
 
@@ -37,7 +39,7 @@ export default function ScanDialog({
   async function pickDirectory() {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const res = await open({ directory: true, multiple: false, title: "选择扫描根目录" });
+      const res = await open({ directory: true, multiple: false, title: t("scan.pickRootTitle") });
       if (!res) return;
       const selected = Array.isArray(res) ? res[0] ?? "" : res;
       if (!selected) return;
@@ -56,17 +58,17 @@ export default function ScanDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>扫描游戏</DialogTitle>
-          <DialogDescription>选择根目录并设置最大扫描深度</DialogDescription>
+          <DialogTitle>{t("scan.title")}</DialogTitle>
+          <DialogDescription>{t("scan.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">扫描根目录</label>
+            <label className="text-sm font-medium">{t("scan.root")}</label>
             <div className="flex gap-2">
               <Input
                 value={root}
-                placeholder="选择扫描根目录"
+                placeholder={t("scan.rootPlaceholder")}
                 onChange={(e) => setRoot(e.target.value)}
               />
               <Button variant="secondary" className="px-3" onClick={pickDirectory}>
@@ -76,7 +78,7 @@ export default function ScanDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">最大扫描深度</label>
+            <label className="text-sm font-medium">{t("scan.maxDepth")}</label>
             <Input
               value={maxDepth}
               type="number"
@@ -89,11 +91,11 @@ export default function ScanDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button disabled={!root || loading} className="gap-2" onClick={handleSubmit}>
             {loading && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin" />}
-            开始扫描
+            {t("scan.start")}
           </Button>
         </DialogFooter>
       </DialogContent>

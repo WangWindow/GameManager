@@ -17,7 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SUPPORTED_ENGINES, getEngineDisplayName } from "@/constants/engines";
+import {
+  ENGINE_PICKER_OPTIONS,
+  resolveSelectedEngineType,
+} from "@/constants/engines";
+import { useI18n } from "@/i18n";
+import { EngineType } from "@/types/engine";
 
 interface ImportDialogProps {
   open: boolean;
@@ -34,8 +39,9 @@ export default function ImportDialog({
   onOpenChange,
   onSubmit,
 }: ImportDialogProps) {
+  const { t } = useI18n();
   const [executablePath, setExecutablePath] = useState("");
-  const [engineType, setEngineType] = useState<string>(SUPPORTED_ENGINES[0]);
+  const [engineType, setEngineType] = useState<string>(EngineType.Other);
 
   useEffect(() => {
     if (open && initialExecutablePath) {
@@ -43,14 +49,14 @@ export default function ImportDialog({
     }
     if (!open) {
       setExecutablePath("");
-      setEngineType(SUPPORTED_ENGINES[0]);
+      setEngineType(EngineType.Other);
     }
   }, [open, initialExecutablePath]);
 
   async function pickExecutable() {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const res = await open({ multiple: false, title: "选择游戏可执行文件" });
+      const res = await open({ multiple: false, title: t("import.pickExecutableTitle") });
       if (!res) return;
       const selected = Array.isArray(res) ? res[0] ?? "" : res;
       if (!selected) return;
@@ -62,24 +68,27 @@ export default function ImportDialog({
 
   function handleSubmit() {
     if (!executablePath) return;
-    onSubmit?.({ executablePath, engineType });
+    onSubmit?.({
+      executablePath,
+      engineType: resolveSelectedEngineType(engineType),
+    });
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>导入游戏</DialogTitle>
-          <DialogDescription>选择游戏目录并指定引擎类型</DialogDescription>
+          <DialogTitle>{t("import.title")}</DialogTitle>
+          <DialogDescription>{t("import.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">可执行文件</label>
+            <label className="text-sm font-medium">{t("import.executable")}</label>
             <div className="flex gap-2">
               <Input
                 value={executablePath}
-                placeholder="选择游戏可执行文件"
+                placeholder={t("import.executablePlaceholder")}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExecutablePath(e.target.value)}
               />
               <Button variant="secondary" className="px-3" onClick={pickExecutable}>
@@ -87,20 +96,20 @@ export default function ImportDialog({
               </Button>
             </div>
             <div className="text-xs text-muted-foreground">
-              游戏目录将自动识别为可执行文件所在目录
+              {t("import.executableHint")}
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">引擎类型</label>
+            <label className="text-sm font-medium">{t("import.engineType")}</label>
             <Select value={engineType} onValueChange={(v) => setEngineType(v)}>
               <SelectTrigger>
-                <SelectValue placeholder="选择引擎类型" />
+                <SelectValue placeholder={t("import.selectEnginePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_ENGINES.map((engine) => (
-                  <SelectItem key={engine} value={engine}>
-                    {getEngineDisplayName(engine as any)}
+                {ENGINE_PICKER_OPTIONS.map((engine) => (
+                  <SelectItem key={engine.value} value={engine.value}>
+                    {engine.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -110,11 +119,11 @@ export default function ImportDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button disabled={!executablePath || loading} className="gap-2" onClick={handleSubmit}>
             {loading && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin" />}
-            导入
+            {t("common.import")}
           </Button>
         </DialogFooter>
       </DialogContent>

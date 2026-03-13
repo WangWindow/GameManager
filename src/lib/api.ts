@@ -198,6 +198,13 @@ export async function setContainerRoot(input: SetContainerRootInput): Promise<vo
 }
 
 /**
+ * 设置 NW.js 是否仅保留最新版本
+ */
+export async function setNwjsKeepLatestOnly(enabled: boolean): Promise<void> {
+  return invoke<void>('set_nwjs_keep_latest_only', { enabled })
+}
+
+/**
  * 平台检测
  */
 export async function getPlatform(): Promise<string> {
@@ -237,6 +244,13 @@ export async function getNwjsStableInfo(): Promise<NwjsStableInfo> {
  */
 export async function downloadNwjsStable(flavor: 'normal' | 'sdk'): Promise<NwjsInstallResult> {
   return invoke<NwjsInstallResult>('download_nwjs_stable', { flavor })
+}
+
+/**
+ * 清理旧版 NW.js
+ */
+export async function cleanupOldNwjsVersions(): Promise<CleanupResult> {
+  return invoke<CleanupResult>('cleanup_old_nwjs_versions')
 }
 
 /**

@@ -199,6 +199,9 @@ pub async fn import_game_dir(
         title: Some(title),
         engine_type: engine_type.clone(),
         path: normalize_path(game_dir),
+        game_type: None,
+        detection_confidence: None,
+        metadata_json: None,
         runtime_version: None,
     };
 
@@ -328,6 +331,9 @@ pub async fn scan_games(
                     title: None,
                     engine_type: engine_type.clone(),
                     path: path_str.clone(),
+                    game_type: None,
+                    detection_confidence: None,
+                    metadata_json: None,
                     runtime_version: None,
                 };
 
@@ -825,6 +831,10 @@ fn count_dirs(root: &Path, max_depth: u32) -> u32 {
 }
 
 fn detect_engine_type(path: &Path) -> Option<String> {
+    detect_engine_with_score(path).map(|(engine, _)| engine)
+}
+
+fn detect_engine_with_score(path: &Path) -> Option<(String, i32)> {
     let mz_score = score_rpg_maker_mz(path);
     let mv_score = score_rpg_maker_mv(path);
     let renpy_score = score_renpy(path);
@@ -854,7 +864,7 @@ fn detect_engine_type(path: &Path) -> Option<String> {
         }
     }
 
-    best.map(|(engine, _, _)| engine.to_string())
+    best.map(|(engine, score, _)| (engine.to_string(), (score * 16).min(100)))
 }
 
 fn min_engine_score(engine: &str) -> i32 {

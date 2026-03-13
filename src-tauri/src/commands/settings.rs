@@ -2,7 +2,7 @@ use crate::models::*;
 use crate::services::{EngineService, GameService, db, download::nwjs};
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 /// 设置状态
@@ -17,8 +17,13 @@ pub struct SettingsState {
 #[tauri::command]
 pub async fn get_app_settings(state: State<'_, SettingsState>) -> Result<AppSettings, String> {
     let container_root = state.container_root.lock().await;
+    let nwjs_keep_latest_only = db::get_setting(&state.pool, SETTING_NWJS_KEEP_LATEST_ONLY)
+        .await?
+        .map(|v| v != "0")
+        .unwrap_or(true);
     Ok(AppSettings {
         container_root: container_root.clone(),
+        nwjs_keep_latest_only,
     })
 }
 
@@ -44,6 +49,16 @@ pub async fn set_container_root(
     Ok(())
 }
 
+/// 设置 NW.js 更新后是否仅保留最新版本
+#[tauri::command]
+pub async fn set_nwjs_keep_latest_only(
+    enabled: bool,
+    state: State<'_, SettingsState>,
+) -> Result<(), String> {
+    let value = if enabled { "1" } else { "0" };
+    db::set_setting(&state.pool, SETTING_NWJS_KEEP_LATEST_ONLY, value).await
+}
+
 /// 获取 NW.js 稳定版信息
 #[tauri::command]
 pub async fn get_nwjs_stable_info() -> Result<nwjs::NwjsStableInfo, String> {
@@ -66,27 +81,175 @@ pub async fn download_nwjs_stable(
     let result = nwjs::download_and_install(&app, info.version, flavor, info.target).await?;
 
     let engine_service = state.engine_service.lock().await;
-    let exists = engine_service
-        .find_engine("nwjs", Some(&result.version))
-        .await?
-        .is_some();
+    let all = engine_service.get_all_engines().await?;
+    let target_name = nwjs_flavor_name(result.flavor);
 
-    if !exists {
-        let name = match result.flavor {
-            nwjs::NwjsFlavor::Sdk => "NW.js (SDK)",
-            nwjs::NwjsFlavor::Normal => "NW.js",
-        };
-        let _ = engine_service
+    let mut current_id: Option<String> = None;
+    for engine in &all {
+        if engine.engine_type != "nwjs" {
+            continue;
+        }
+        if !is_same_nwjs_flavor(engine, result.flavor) {
+            continue;
+        }
+        if engine.version == result.version {
+            current_id = Some(engine.id.clone());
+            break;
+        }
+    }
+
+    if current_id.is_none() {
+        let added = engine_service
             .add_engine(
-                name.to_string(),
+                target_name.to_string(),
                 result.version.clone(),
                 "nwjs".to_string(),
                 result.install_dir.clone(),
             )
-            .await;
+            .await?;
+        current_id = Some(added.id);
+    }
+
+    if keep_latest_nwjs_enabled(&state.pool).await? {
+        prune_old_nwjs_engines(
+            &engine_service,
+            &app,
+            current_id.as_deref(),
+            &result.version,
+            result.flavor,
+        )
+        .await?;
     }
 
     Ok(result)
+}
+
+/// 清理旧版 NW.js（按 flavor 仅保留最新安装项）
+#[tauri::command]
+pub async fn cleanup_old_nwjs_versions(
+    app: AppHandle,
+    state: State<'_, SettingsState>,
+) -> Result<CleanupResult, String> {
+    let engine_service = state.engine_service.lock().await;
+    let engines = engine_service.get_all_engines().await?;
+
+    let mut latest_normal: Option<Engine> = None;
+    let mut latest_sdk: Option<Engine> = None;
+
+    for engine in &engines {
+        if engine.engine_type != "nwjs" {
+            continue;
+        }
+        let target = if is_nwjs_sdk_name(&engine.name) {
+            &mut latest_sdk
+        } else {
+            &mut latest_normal
+        };
+
+        match target {
+            None => *target = Some(engine.clone()),
+            Some(current) if engine.installed_at > current.installed_at => {
+                *target = Some(engine.clone())
+            }
+            _ => {}
+        }
+    }
+
+    let keep_normal = latest_normal.as_ref().map(|e| e.id.as_str());
+    let keep_sdk = latest_sdk.as_ref().map(|e| e.id.as_str());
+    let mut deleted = 0u32;
+
+    for engine in engines {
+        if engine.engine_type != "nwjs" {
+            continue;
+        }
+        let keep = if is_nwjs_sdk_name(&engine.name) {
+            keep_sdk
+        } else {
+            keep_normal
+        };
+        if keep == Some(engine.id.as_str()) {
+            continue;
+        }
+
+        remove_engine_path_if_owned(&app, &engine.path);
+        engine_service.delete_engine(&engine.id).await?;
+        deleted += 1;
+    }
+
+    Ok(CleanupResult { deleted })
+}
+
+fn nwjs_flavor_name(flavor: nwjs::NwjsFlavor) -> &'static str {
+    match flavor {
+        nwjs::NwjsFlavor::Sdk => "NW.js (SDK)",
+        nwjs::NwjsFlavor::Normal => "NW.js",
+    }
+}
+
+fn is_nwjs_sdk_name(name: &str) -> bool {
+    name.to_lowercase().contains("sdk")
+}
+
+fn is_same_nwjs_flavor(engine: &Engine, flavor: nwjs::NwjsFlavor) -> bool {
+    let lower = engine.name.to_lowercase();
+    match flavor {
+        nwjs::NwjsFlavor::Sdk => lower.contains("sdk"),
+        nwjs::NwjsFlavor::Normal => !lower.contains("sdk"),
+    }
+}
+
+async fn keep_latest_nwjs_enabled(pool: &SqlitePool) -> Result<bool, String> {
+    Ok(db::get_setting(pool, SETTING_NWJS_KEEP_LATEST_ONLY)
+        .await?
+        .map(|v| v != "0")
+        .unwrap_or(true))
+}
+
+async fn prune_old_nwjs_engines(
+    engine_service: &EngineService,
+    app: &AppHandle,
+    keep_id: Option<&str>,
+    keep_version: &str,
+    keep_flavor: nwjs::NwjsFlavor,
+) -> Result<(), String> {
+    let engines = engine_service.get_all_engines().await?;
+
+    for engine in engines {
+        if engine.engine_type != "nwjs" {
+            continue;
+        }
+        if !is_same_nwjs_flavor(&engine, keep_flavor) {
+            continue;
+        }
+        if keep_id == Some(engine.id.as_str()) {
+            continue;
+        }
+        if engine.version == keep_version {
+            continue;
+        }
+
+        remove_engine_path_if_owned(app, &engine.path);
+        engine_service.delete_engine(&engine.id).await?;
+    }
+
+    Ok(())
+}
+
+fn remove_engine_path_if_owned(app: &AppHandle, path: &str) {
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        let engine_path = crate::services::path::canonicalize_path(std::path::Path::new(path));
+        if crate::services::path::is_within_dir(&engine_path, &app_data_dir) {
+            if engine_path.is_dir() {
+                let _ = std::fs::remove_dir_all(&engine_path);
+                if let Some(parent) = engine_path.parent() {
+                    let _ = std::fs::remove_dir(parent);
+                }
+            } else if engine_path.is_file() {
+                let _ = std::fs::remove_file(&engine_path);
+            }
+        }
+    }
 }
 
 /// 清理无用容器

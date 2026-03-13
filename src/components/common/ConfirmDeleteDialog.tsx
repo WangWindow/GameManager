@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useI18n } from "@/i18n";
 
 interface ConfirmDeleteDialogProps {
   open: boolean;
@@ -21,21 +22,24 @@ export default function ConfirmDeleteDialog({
   onOpenChange,
   onConfirm,
 }: ConfirmDeleteDialogProps) {
+  const { t } = useI18n();
+  const titleSegment = title ? `「${title}」` : "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
+          <DialogTitle>{t("confirmDelete.title")}</DialogTitle>
           <DialogDescription>
-            确定要删除游戏{title ? `「${title}」` : ""}吗？
+            {t("confirmDelete.description", { title: titleSegment })}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
-            删除
+            {t("common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

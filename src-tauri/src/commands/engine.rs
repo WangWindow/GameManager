@@ -1,5 +1,6 @@
 use crate::models::*;
-use crate::services::{EngineService, download::nwjs};
+use crate::services::{EngineService, db, download::nwjs};
+use sqlx::SqlitePool;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -7,6 +8,7 @@ use tokio::sync::Mutex;
 /// 引擎状态
 pub struct EngineState {
     pub engine_service: Arc<Mutex<EngineService>>,
+    pub pool: SqlitePool,
 }
 
 /// 获取所有引擎
@@ -163,6 +165,14 @@ pub async fn update_engine(
         .update_engine_install(&engine.id, info.version.clone(), result.install_dir.clone())
         .await?;
 
+    let keep_latest = db::get_setting(&state.pool, SETTING_NWJS_KEEP_LATEST_ONLY)
+        .await?
+        .map(|v| v != "0")
+        .unwrap_or(true);
+    if keep_latest {
+        prune_old_nwjs_engines(&service, &app, &engine.id, &info.version, &engine.name).await?;
+    }
+
     Ok(EngineUpdateResult {
         engine_id: engine.id,
         updated: true,
@@ -170,6 +180,50 @@ pub async fn update_engine(
         to_version: info.version,
         install_dir: Some(result.install_dir),
     })
+}
+
+async fn prune_old_nwjs_engines(
+    service: &EngineService,
+    app: &AppHandle,
+    keep_id: &str,
+    keep_version: &str,
+    keep_name: &str,
+) -> Result<(), String> {
+    let keep_is_sdk = keep_name.to_lowercase().contains("sdk");
+    let engines = service.get_all_engines().await?;
+
+    for item in engines {
+        if item.engine_type != "nwjs" {
+            continue;
+        }
+
+        let is_sdk = item.name.to_lowercase().contains("sdk");
+        if is_sdk != keep_is_sdk {
+            continue;
+        }
+        if item.id == keep_id || item.version == keep_version {
+            continue;
+        }
+
+        if let Ok(app_data_dir) = app.path().app_data_dir() {
+            let engine_path =
+                crate::services::path::canonicalize_path(std::path::Path::new(&item.path));
+            if crate::services::path::is_within_dir(&engine_path, &app_data_dir) {
+                if engine_path.is_dir() {
+                    let _ = std::fs::remove_dir_all(&engine_path);
+                    if let Some(parent) = engine_path.parent() {
+                        let _ = std::fs::remove_dir(parent);
+                    }
+                } else if engine_path.is_file() {
+                    let _ = std::fs::remove_file(&engine_path);
+                }
+            }
+        }
+
+        service.delete_engine(&item.id).await?;
+    }
+
+    Ok(())
 }
 
 fn is_newer_version(current: &str, latest: &str) -> bool {

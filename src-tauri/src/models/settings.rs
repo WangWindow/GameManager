@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub const SETTING_CONTAINER_ROOT: &str = "container_root";
 pub const SETTING_BOTTLES_DEFAULT: &str = "bottles_default";
 pub const SETTING_BOTTLES_ENABLED: &str = "bottles_enabled";
+pub const SETTING_NWJS_KEEP_LATEST_ONLY: &str = "nwjs_keep_latest_only";
 
 /// 应用全局设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,6 +12,8 @@ pub const SETTING_BOTTLES_ENABLED: &str = "bottles_enabled";
 pub struct AppSettings {
     /// 容器根目录
     pub container_root: String,
+    /// NW.js 是否仅保留最新版本
+    pub nwjs_keep_latest_only: bool,
 }
 
 /// 集成选项（可扩展）
@@ -52,6 +55,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             container_root: String::new(),
+            nwjs_keep_latest_only: true,
         }
     }
 }

@@ -8,6 +8,8 @@
 export interface AppSettings {
   /** 容器根目录 */
   containerRoot: string
+  /** NW.js 仅保留最新版本 */
+  nwjsKeepLatestOnly: boolean
 }
 
 /**

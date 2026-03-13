@@ -2,12 +2,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   cleanupUnusedContainers,
+  cleanupOldNwjsVersions,
   deleteEngine,
   downloadNwjsStable,
   getEngineUpdateInfo,
   getNwjsStableInfo,
   updateEngine,
 } from "@/lib/api";
+import { translate } from "@/i18n";
 import type { EngineDto } from "@/types";
 
 interface Options {
@@ -22,13 +24,13 @@ export function useMaintenanceActions(options: Options) {
     setMaintenanceLoading(true);
     try {
       const info = await getNwjsStableInfo();
-      options.updateTask(`下载 NW.js ${info.version}`, 0);
+      options.updateTask(translate("maintenance.taskInstallNwjs", { version: info.version }), 0);
       await downloadNwjsStable("normal");
-      toast.success("NW.js 下载完成");
-      options.updateTask("下载完成", 100);
+      toast.success(translate("maintenance.toastInstallDone"));
+      options.updateTask(translate("maintenance.taskInstallDone"), 100);
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "下载失败";
+      const msg = e instanceof Error ? e.message : translate("maintenance.toastDownloadFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);
@@ -40,9 +42,24 @@ export function useMaintenanceActions(options: Options) {
     setMaintenanceLoading(true);
     try {
       const res = await cleanupUnusedContainers();
-      toast.success(`清理完成：${res.deleted} 个`);
+      toast.success(translate("maintenance.toastCleanupDone", { count: res.deleted }));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "清理失败";
+      const msg = e instanceof Error ? e.message : translate("maintenance.toastCleanupFailed");
+      toast.error(msg);
+    } finally {
+      setMaintenanceLoading(false);
+    }
+  }
+
+  async function handleCleanupOldNwjs() {
+    if (maintenanceLoading) return;
+    setMaintenanceLoading(true);
+    try {
+      const res = await cleanupOldNwjsVersions();
+      toast.success(translate("maintenance.toastCleanupOldNwjsDone", { count: res.deleted }));
+      window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : translate("maintenance.toastCleanupOldNwjsFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);
@@ -52,12 +69,12 @@ export function useMaintenanceActions(options: Options) {
   async function handleUpdateEngine(engine: EngineDto) {
     const info = await getEngineUpdateInfo(engine.id);
     if (!info.updateAvailable) {
-      toast.info("已是最新版本");
+      toast.info(translate("maintenance.toastAlreadyLatest"));
       return;
     }
     const result = await updateEngine(engine.id);
     if (result.updated) {
-      toast.success(`已更新到 ${result.toVersion}`);
+      toast.success(translate("maintenance.toastUpdatedTo", { version: result.toVersion }));
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     }
   }
@@ -67,10 +84,10 @@ export function useMaintenanceActions(options: Options) {
     setMaintenanceLoading(true);
     try {
       await deleteEngine(engine.id);
-      toast.success(`已卸载 ${engine.name}`);
+      toast.success(translate("maintenance.toastUninstalled", { name: engine.name }));
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "卸载失败";
+      const msg = e instanceof Error ? e.message : translate("maintenance.toastUninstallFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);
@@ -81,6 +98,7 @@ export function useMaintenanceActions(options: Options) {
     maintenanceLoading,
     handleDownloadNwjs,
     handleCleanupContainers,
+    handleCleanupOldNwjs,
     handleUpdateEngine,
     handleRemoveEngine,
   };

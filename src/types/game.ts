@@ -14,16 +14,24 @@ export interface GameDto {
   engineType: string
   /** 游戏路径 */
   path: string
+  /** 游戏类型（如 rpg、visual_novel） */
+  gameType: string
+  /** 识别置信度（0-100） */
+  detectionConfidence: number
   /** 路径是否有效 */
   pathValid: boolean
   /** 运行时版本 */
   runtimeVersion?: string
   /** 封面路径 */
   coverPath?: string
+  /** 游玩次数 */
+  playCount: number
   /** 创建时间（Unix毫秒时间戳） */
   createdAt: number
   /** 最后游玩时间（Unix毫秒时间戳） */
   lastPlayedAt?: number
+  /** 更新时间（Unix毫秒时间戳） */
+  updatedAt: number
 }
 
 /**
@@ -36,6 +44,12 @@ export interface AddGameInput {
   engineType: string
   /** 游戏路径 */
   path: string
+  /** 游戏类型 */
+  gameType?: string
+  /** 识别置信度（0-100） */
+  detectionConfidence?: number
+  /** 扩展元数据（JSON） */
+  metadataJson?: string
   /** 运行时版本 */
   runtimeVersion?: string
 }
@@ -50,6 +64,12 @@ export interface UpdateGameInput {
   engineType?: string
   /** 游戏路径 */
   path?: string
+  /** 游戏类型 */
+  gameType?: string
+  /** 识别置信度（0-100） */
+  detectionConfidence?: number
+  /** 扩展元数据（JSON） */
+  metadataJson?: string
   /** 运行时版本 */
   runtimeVersion?: string
 }

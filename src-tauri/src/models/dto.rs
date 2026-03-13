@@ -12,16 +12,24 @@ pub struct GameDto {
     pub engine_type: String,
     /// 游戏路径
     pub path: String,
+    /// 游戏类型（如 rpg、visual_novel）
+    pub game_type: String,
+    /// 识别置信度（0-100）
+    pub detection_confidence: i32,
     /// 路径是否有效
     pub path_valid: bool,
     /// 运行时版本
     pub runtime_version: Option<String>,
     /// 封面路径
     pub cover_path: Option<String>,
+    /// 游玩次数
+    pub play_count: i64,
     /// 创建时间
     pub created_at: i64,
     /// 最后游玩时间
     pub last_played_at: Option<i64>,
+    /// 更新时间
+    pub updated_at: i64,
 }
 
 /// 添加游戏输入
@@ -34,6 +42,12 @@ pub struct AddGameInput {
     pub engine_type: String,
     /// 游戏路径
     pub path: String,
+    /// 游戏类型
+    pub game_type: Option<String>,
+    /// 识别置信度（0-100）
+    pub detection_confidence: Option<i32>,
+    /// 扩展元数据（JSON）
+    pub metadata_json: Option<String>,
     /// 运行时版本
     pub runtime_version: Option<String>,
 }
@@ -58,6 +72,12 @@ pub struct UpdateGameInput {
     pub engine_type: Option<String>,
     /// 游戏路径
     pub path: Option<String>,
+    /// 游戏类型
+    pub game_type: Option<String>,
+    /// 识别置信度（0-100）
+    pub detection_confidence: Option<i32>,
+    /// 扩展元数据（JSON）
+    pub metadata_json: Option<String>,
     /// 运行时版本
     pub runtime_version: Option<String>,
 }

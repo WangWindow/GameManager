@@ -19,6 +19,10 @@ import { useTaskStatus } from "@/hooks/useTaskStatus";
 import { useTauriEvents } from "@/hooks/useTauriEvents";
 import { useGameLibraryActions } from "@/hooks/useGameLibraryActions";
 import { useMaintenanceActions } from "@/hooks/useMaintenanceActions";
+import {
+  ENGINE_FILTER_OPTIONS,
+  ENGINE_OPTION_RPGMAKER_NWJS,
+} from "@/constants/engines";
 
 export type ViewMode = "grid" | "list";
 
@@ -29,6 +33,7 @@ export default function App() {
   const [scanOpen, setScanOpen] = useState(false);
   const [showStatusBar, setShowStatusBar] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [engineFilter, setEngineFilter] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [gameSettingsOpen, setGameSettingsOpen] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
@@ -64,18 +69,30 @@ export default function App() {
     closeGameSettings: () => setGameSettingsOpen(false),
   });
 
-  const { handleDownloadNwjs, handleCleanupContainers, handleUpdateEngine, handleRemoveEngine } =
+  const {
+    handleDownloadNwjs,
+    handleCleanupContainers,
+    handleCleanupOldNwjs,
+    handleUpdateEngine,
+    handleRemoveEngine,
+  } =
     useMaintenanceActions({ updateTask });
 
   const filteredGames = useMemo(() => {
-    if (!searchQuery) return games;
-    const query = searchQuery.toLowerCase();
-    return games.filter(
-      (game: GameDto) =>
+    const query = searchQuery.trim().toLowerCase();
+    return games.filter((game: GameDto) => {
+      const matchesKeyword =
+        query.length === 0 ||
         game.title.toLowerCase().includes(query) ||
-        game.engineType.toLowerCase().includes(query),
-    );
-  }, [games, searchQuery]);
+        game.engineType.toLowerCase().includes(query);
+      const matchesType =
+        engineFilter === "all" ||
+        (engineFilter === ENGINE_OPTION_RPGMAKER_NWJS
+          ? ["rpgmakermv", "rpgmakermz"].includes(game.engineType)
+          : game.engineType === engineFilter);
+      return matchesKeyword && matchesType;
+    });
+  }, [games, searchQuery, engineFilter]);
 
   const statusBarVisible = useMemo(
     () => showStatusBar && taskStatusVisible,
@@ -88,6 +105,10 @@ export default function App() {
   );
 
   const unlistenDragDropRef = useRef<(() => void) | null>(null);
+
+  const handleRefreshGamesEvent = () => {
+    void fetchGames(true);
+  };
 
   useEffect(() => {
     localStorage.setItem("gm_show_status_bar", String(showStatusBar));
@@ -107,11 +128,11 @@ export default function App() {
     }
 
     fetchGames();
-    window.addEventListener("gm:refresh-games", fetchGames);
+    window.addEventListener("gm:refresh-games", handleRefreshGamesEvent);
     void initDragDrop();
 
     return () => {
-      window.removeEventListener("gm:refresh-games", fetchGames);
+      window.removeEventListener("gm:refresh-games", handleRefreshGamesEvent);
       teardownDomDragDrop();
       if (typeof unlistenDragDropRef.current === "function") {
         try {
@@ -262,8 +283,14 @@ export default function App() {
               <GameLibraryHeader
                 count={filteredGames.length}
                 search={searchQuery}
+                selectedEngine={engineFilter}
+                engineOptions={ENGINE_FILTER_OPTIONS.map((item) => ({
+                  value: item.value,
+                  label: item.label,
+                }))}
                 viewMode={viewMode}
                 onSearchChange={setSearchQuery}
+                onEngineChange={setEngineFilter}
                 onViewModeChange={setViewMode}
               />
 
@@ -300,10 +327,9 @@ export default function App() {
 
       <ManagementDialog
         open={manageOpen}
-        showStatusBar={showStatusBar}
         onOpenChange={setManageOpen}
-        onShowStatusBarChange={setShowStatusBar}
         onDownloadNwjs={handleDownloadNwjs}
+        onCleanupOldNwjs={handleCleanupOldNwjs}
         onCleanupContainers={handleCleanupContainers}
         onUpdateEngine={handleUpdateEngine}
         onRemoveEngine={handleRemoveEngine}
@@ -312,8 +338,10 @@ export default function App() {
       <SettingsDialog
         open={settingsOpen}
         themeMode={themeMode}
+        showStatusBar={showStatusBar}
         onOpenChange={setSettingsOpen}
         onThemeModeChange={setThemeMode}
+        onShowStatusBarChange={setShowStatusBar}
       />
 
       <ConfirmDeleteDialog

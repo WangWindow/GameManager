@@ -58,14 +58,26 @@ pub struct Game {
     pub engine_type: String,
     /// 游戏路径
     pub path: String,
+    /// 规范化路径（用于去重）
+    pub normalized_path: String,
+    /// 游戏类型（如 rpg、visual_novel）
+    pub game_type: String,
+    /// 识别置信度（0-100）
+    pub detection_confidence: i32,
     /// 运行时版本（可选）
     pub runtime_version: Option<String>,
     /// 封面图片路径（可选）
     pub cover_path: Option<String>,
+    /// 游玩次数
+    pub play_count: i64,
+    /// 扩展元数据（JSON）
+    pub metadata_json: Option<String>,
     /// 创建时间（Unix毫秒时间戳）
     pub created_at: i64,
     /// 最后游玩时间（Unix毫秒时间戳，可选）
     pub last_played_at: Option<i64>,
+    /// 更新时间（Unix毫秒时间戳）
+    pub updated_at: i64,
 }
 
 impl Game {
@@ -76,7 +88,11 @@ impl Game {
         title: String,
         engine_type: EngineType,
         path: String,
+        normalized_path: String,
+        game_type: String,
+        detection_confidence: i32,
         runtime_version: Option<String>,
+        metadata_json: Option<String>,
     ) -> Self {
         let now = crate::services::now_unix_ms();
         Self {
@@ -85,10 +101,16 @@ impl Game {
             title,
             engine_type: engine_type.as_str().to_string(),
             path,
+            normalized_path,
+            game_type,
+            detection_confidence,
             runtime_version,
             cover_path: None,
+            play_count: 0,
+            metadata_json,
             created_at: now,
             last_played_at: None,
+            updated_at: now,
         }
     }
 

@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import GameCard from "./GameCard";
+import { useI18n } from "@/i18n";
 import type { GameDto } from "@/types";
 
 interface GameGridProps {
@@ -19,6 +20,7 @@ export default function GameGrid({
   onEdit,
   onDelete,
 }: GameGridProps) {
+  const { t } = useI18n();
   const isEmpty = !loading && games.length === 0;
   const isGrid = viewMode === "grid";
 
@@ -64,9 +66,9 @@ export default function GameGrid({
     <Card className="mx-auto w-full max-w-lg">
       <CardContent className="flex flex-col items-center justify-center text-center">
         <div className="mb-4 text-6xl">🎮</div>
-        <h3 className="mb-2 text-lg font-semibold">暂无游戏</h3>
+        <h3 className="mb-2 text-lg font-semibold">{t("games.emptyTitle")}</h3>
         <p className="text-sm text-muted-foreground">
-          点击右上角的按钮导入或扫描游戏
+          {t("games.emptyHint")}
         </p>
       </CardContent>
     </Card>

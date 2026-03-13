@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useI18n } from "@/i18n";
 import { useWindowControls } from "@/hooks/useWindowControls";
 
 interface TitleBarProps {
@@ -18,6 +19,7 @@ interface TitleBarProps {
 
 export default function TitleBar({ onManage, onImport, onScan, onSettings }: TitleBarProps) {
   const { isTauri, isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+  const { t } = useI18n();
 
   return (
     <header
@@ -34,34 +36,58 @@ export default function TitleBar({ onManage, onImport, onScan, onSettings }: Tit
       </div>
 
       <div data-tauri-drag-region="false" className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="h-8 gap-2 px-2" title="导入" onClick={onImport}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-2 px-2"
+          title={t("common.import")}
+          onClick={onImport}
+        >
           <Icon icon="ri:add-line" className="h-4 w-4" />
-          <span className="text-xs">导入</span>
+          <span className="text-xs">{t("common.import")}</span>
         </Button>
-        <Button variant="ghost" size="sm" className="h-8 gap-2 px-2" title="扫描" onClick={onScan}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-2 px-2"
+          title={t("common.scan")}
+          onClick={onScan}
+        >
           <Icon icon="ri:scan-line" className="h-4 w-4" />
-          <span className="text-xs">扫描</span>
+          <span className="text-xs">{t("common.scan")}</span>
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title="更多">
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("common.more")}>
               <Icon icon="ri:more-2-line" className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onManage}>管理中心</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onManage}>{t("titleBar.maintenance")}</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onSettings}>设置</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onSettings}>{t("common.settings")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
         {isTauri && (
           <>
-            <Button variant="ghost" size="icon" className="h-8 w-9" title="最小化" onClick={minimize}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-9"
+              title={t("titleBar.minimize")}
+              onClick={minimize}
+            >
               <Icon icon="ri:subtract-line" className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-9" title="最大化/还原" onClick={toggleMaximize}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-9"
+              title={t("titleBar.maximize")}
+              onClick={toggleMaximize}
+            >
               <Icon
                 icon={
                   isMaximized ? "ri:checkbox-multiple-blank-line" : "ri:checkbox-blank-line"
@@ -69,7 +95,13 @@ export default function TitleBar({ onManage, onImport, onScan, onSettings }: Tit
                 className="h-4 w-4"
               />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-9" title="关闭" onClick={close}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-9"
+              title={t("titleBar.closeWindow")}
+              onClick={close}
+            >
               <Icon icon="ri:close-line" className="h-4 w-4" />
             </Button>
           </>

@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getEngineDisplayName, getEngineIcon } from "@/constants/engines";
+import { useI18n } from "@/i18n";
 import { formatRelativeTime } from "@/lib/utils";
 import type { GameDto } from "@/types";
 
@@ -15,6 +16,7 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardProps) {
+  const { t } = useI18n();
   const coverSrc = useMemo(() => {
     if (!game.coverPath) return "";
     try {
@@ -52,7 +54,7 @@ export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardP
           </h3>
           {!game.pathValid && (
             <Badge variant="destructive" className="h-4 px-2 text-[10px]">
-              路径无效
+              {t("game.pathInvalid")}
             </Badge>
           )}
         </div>
@@ -67,14 +69,14 @@ export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardP
 
       {/* 操作按钮 */}
       <div className="flex shrink-0 items-center gap-2">
-        <Button size="icon" className="h-7 w-7" title="启动游戏" onClick={onLaunch}>
+        <Button size="icon" className="h-7 w-7" title={t("game.launch")} onClick={onLaunch}>
           <Icon icon="ri:play-fill" className="h-3.5 w-3.5" />
         </Button>
         <Button
           variant="secondary"
           size="icon"
           className="h-7 w-7"
-          title="编辑"
+          title={t("game.edit")}
           onClick={onEdit}
         >
           <Icon icon="ri:settings-3-line" className="h-3.5 w-3.5" />
@@ -83,7 +85,7 @@ export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardP
           variant="ghost"
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-          title="删除"
+          title={t("game.delete")}
           onClick={onDelete}
         >
           <Icon icon="ri:delete-bin-line" className="h-3.5 w-3.5" />

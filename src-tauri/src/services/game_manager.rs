@@ -19,8 +19,8 @@ impl GameService {
     /// 获取所有游戏列表
     pub async fn get_all_games(&self) -> Result<Vec<Game>, String> {
         let games = sqlx::query_as::<_, Game>(
-            "SELECT id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at
-             FROM games ORDER BY created_at DESC"
+            "SELECT id, profile_key, title, engine_type, path, normalized_path, game_type, detection_confidence, runtime_version, cover_path, play_count, metadata_json, created_at, last_played_at, updated_at
+             FROM games ORDER BY last_played_at DESC, created_at DESC"
         )
         .fetch_all(&self.pool)
         .await
@@ -32,7 +32,7 @@ impl GameService {
     /// 根据ID获取游戏
     pub async fn get_game_by_id(&self, id: &str) -> Result<Option<Game>, String> {
         let game = sqlx::query_as::<_, Game>(
-            "SELECT id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at
+            "SELECT id, profile_key, title, engine_type, path, normalized_path, game_type, detection_confidence, runtime_version, cover_path, play_count, metadata_json, created_at, last_played_at, updated_at
              FROM games WHERE id = ?"
         )
         .bind(id)
@@ -44,11 +44,16 @@ impl GameService {
     }
     /// 根据路径获取游戏（path 必须为规范化目录路径）
     pub async fn get_game_by_path(&self, path: &str) -> Result<Option<Game>, String> {
+        let normalized_input = crate::services::path::canonicalize_path(std::path::Path::new(path))
+            .to_string_lossy()
+            .to_string();
+
         // 先尝试精确匹配
         let game = sqlx::query_as::<_, Game>(
-            "SELECT id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at
-             FROM games WHERE path = ?"
+            "SELECT id, profile_key, title, engine_type, path, normalized_path, game_type, detection_confidence, runtime_version, cover_path, play_count, metadata_json, created_at, last_played_at, updated_at
+             FROM games WHERE normalized_path = ? OR path = ?"
         )
+        .bind(&normalized_input)
         .bind(path)
         .fetch_optional(&self.pool)
         .await
@@ -58,13 +63,9 @@ impl GameService {
             return Ok(game);
         }
 
-        // 如果未找到，做一次归一化比较以兼容旧数据
-        let normalized_input = crate::services::path::canonicalize_path(std::path::Path::new(path))
-            .to_string_lossy()
-            .to_string();
-
+        // 如果未找到，做一次归一化比较以兼容历史数据
         let all_games = sqlx::query_as::<_, Game>(
-            "SELECT id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at FROM games"
+            "SELECT id, profile_key, title, engine_type, path, normalized_path, game_type, detection_confidence, runtime_version, cover_path, play_count, metadata_json, created_at, last_played_at, updated_at FROM games"
         )
         .fetch_all(&self.pool)
         .await
@@ -113,24 +114,36 @@ impl GameService {
             profile_key,
             title,
             engine_type,
+            normalized_path.clone(),
             normalized_path,
+            input
+                .game_type
+                .unwrap_or_else(|| infer_game_type_from_engine(&input.engine_type)),
+            input.detection_confidence.unwrap_or(0).clamp(0, 100),
             input.runtime_version,
+            input.metadata_json,
         );
 
         // 插入数据库
         sqlx::query(
-              "INSERT INTO games (id, profile_key, title, engine_type, path, runtime_version, cover_path, created_at, last_played_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                  "INSERT INTO games (id, profile_key, title, engine_type, path, normalized_path, game_type, detection_confidence, runtime_version, cover_path, play_count, metadata_json, created_at, last_played_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&game.id)
            .bind(&game.profile_key)
         .bind(&game.title)
         .bind(&game.engine_type)
         .bind(&game.path)
+          .bind(&game.normalized_path)
+          .bind(&game.game_type)
+          .bind(game.detection_confidence)
         .bind(&game.runtime_version)
         .bind(&game.cover_path)
+          .bind(game.play_count)
+          .bind(&game.metadata_json)
         .bind(game.created_at)
         .bind(game.last_played_at)
+          .bind(game.updated_at)
         .execute(&self.pool)
         .await
         .map_err(|e| format!("添加游戏失败: {}", e))?;
@@ -164,19 +177,36 @@ impl GameService {
                 }
             }
             game.path = normalized;
+            game.normalized_path = game.path.clone();
+        }
+        if let Some(game_type) = input.game_type {
+            game.game_type = game_type;
+        }
+        if let Some(confidence) = input.detection_confidence {
+            game.detection_confidence = confidence.clamp(0, 100);
+        }
+        if let Some(metadata_json) = input.metadata_json {
+            game.metadata_json = Some(metadata_json);
         }
         if let Some(runtime_version) = input.runtime_version {
             game.runtime_version = Some(runtime_version);
         }
 
+        game.updated_at = crate::services::now_unix_ms();
+
         // 更新数据库
         sqlx::query(
-            "UPDATE games SET title = ?, engine_type = ?, path = ?, runtime_version = ? WHERE id = ?"
+            "UPDATE games SET title = ?, engine_type = ?, path = ?, normalized_path = ?, game_type = ?, detection_confidence = ?, runtime_version = ?, metadata_json = ?, updated_at = ? WHERE id = ?"
         )
         .bind(&game.title)
         .bind(&game.engine_type)
         .bind(&game.path)
+        .bind(&game.normalized_path)
+        .bind(&game.game_type)
+        .bind(game.detection_confidence)
         .bind(&game.runtime_version)
+        .bind(&game.metadata_json)
+        .bind(game.updated_at)
         .bind(id)
         .execute(&self.pool)
         .await
@@ -199,7 +229,8 @@ impl GameService {
     /// 更新游戏最后游玩时间
     pub async fn update_last_played(&self, id: &str) -> Result<(), String> {
         let now = crate::services::now_unix_ms();
-        sqlx::query("UPDATE games SET last_played_at = ? WHERE id = ?")
+        sqlx::query("UPDATE games SET last_played_at = ?, play_count = play_count + 1, updated_at = ? WHERE id = ?")
+            .bind(now)
             .bind(now)
             .bind(id)
             .execute(&self.pool)
@@ -215,8 +246,9 @@ impl GameService {
         id: &str,
         cover_path: Option<String>,
     ) -> Result<(), String> {
-        sqlx::query("UPDATE games SET cover_path = ? WHERE id = ?")
+        sqlx::query("UPDATE games SET cover_path = ?, updated_at = ? WHERE id = ?")
             .bind(cover_path)
+            .bind(crate::services::now_unix_ms())
             .bind(id)
             .execute(&self.pool)
             .await
@@ -233,11 +265,15 @@ impl GameService {
             title: game.title,
             engine_type: game.engine_type,
             path: game.path,
+            game_type: game.game_type,
+            detection_confidence: game.detection_confidence,
             path_valid,
             runtime_version: game.runtime_version,
             cover_path: game.cover_path,
+            play_count: game.play_count,
             created_at: game.created_at,
             last_played_at: game.last_played_at,
+            updated_at: game.updated_at,
         }
     }
 
@@ -348,4 +384,15 @@ fn parse_profile_suffix(key: &str, base: &str) -> Option<u32> {
 
 fn format_profile_key(base: &str, num: u32) -> String {
     format!("{}-{:03}", base, num)
+}
+
+fn infer_game_type_from_engine(engine_type: &str) -> String {
+    match EngineType::from_str(engine_type) {
+        EngineType::RenPy => "visual_novel".to_string(),
+        EngineType::RpgMakerVX
+        | EngineType::RpgMakerVXAce
+        | EngineType::RpgMakerMV
+        | EngineType::RpgMakerMZ => "rpg".to_string(),
+        EngineType::Other => "unknown".to_string(),
+    }
 }
