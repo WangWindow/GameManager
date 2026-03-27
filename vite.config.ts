@@ -13,6 +13,46 @@ export default defineConfig(async () => ({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string | string[]) {
+          if (!id.includes("node_modules")) {
+            return;
+          }
+
+          if (id.includes("react") || id.includes("scheduler")) {
+            return "react-vendor";
+          }
+
+          if (id.includes("@tauri-apps")) {
+            return "tauri-vendor";
+          }
+
+          if (
+            id.includes("@radix-ui") ||
+            id.includes("radix-ui") ||
+            id.includes("class-variance-authority") ||
+            id.includes("clsx") ||
+            id.includes("tailwind-merge")
+          ) {
+            return "ui-vendor";
+          }
+
+          if (id.includes("i18next") || id.includes("react-i18next")) {
+            return "i18n-vendor";
+          }
+
+          if (id.includes("motion") || id.includes("@iconify")) {
+            return "ux-vendor";
+          }
+
+          return "vendor";
+        },
+      },
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

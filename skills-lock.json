@@ -1,15 +1,10 @@
 {
   "version": 1,
   "skills": {
-    "coding-agent": {
-      "source": "openclaw/openclaw",
+    "better-icons": {
+      "source": "better-auth/better-icons",
       "sourceType": "github",
-      "computedHash": "8f668cf6bc989191e89d84e6dd49076f8b1c84d2ccae29a16bd211c62774ca2e"
-    },
-    "documentation-lookup": {
-      "source": "upstash/context7",
-      "sourceType": "github",
-      "computedHash": "eb5e668b7575567d3252382d52320d69867e18df968695c946af066ffa686bad"
+      "computedHash": "ec859a92bcb6fef5ae1fe8ab1d4b10c1d76fae7a809101c9bce1230944af1b0e"
     },
     "extract-errors": {
       "source": "facebook/react",
@@ -36,40 +31,30 @@
       "sourceType": "github",
       "computedHash": "3358c67bbdee529ceb49a37f260fab3cb507be2dfbdedd073295fcae7f16bc7e"
     },
-    "gh-issues": {
-      "source": "openclaw/openclaw",
+    "shadcn": {
+      "source": "shadcn/ui",
       "sourceType": "github",
-      "computedHash": "3f06130ae1cdc25648f6e9f9f3eed8108152eae01e24aa2d8543f164a389bb22"
+      "computedHash": "507f011a70e8b3ae242bdc0bb5b39fd91a1d4049a0f3c281991ccf84973d591c"
     },
-    "github": {
-      "source": "openclaw/openclaw",
+    "tailwind-design-system": {
+      "source": "wshobson/agents",
       "sourceType": "github",
-      "computedHash": "78c25ef4dbe70f5ec149b7a5d55aadd4b2cb1aa6246c0cfcea66d316bdb5b171"
-    },
-    "session-logs": {
-      "source": "openclaw/openclaw",
-      "sourceType": "github",
-      "computedHash": "66226da5840d5e85c69ffcdad29c7bf23c260fbbcf3782e663d791500899e2f4"
-    },
-    "tauri-development": {
-      "source": "robinebers/openusage",
-      "sourceType": "github",
-      "computedHash": "0edb30d9211bebab653e1ced97835c77f5efd7bfe2922550ec52c47a6fa09ff9"
+      "computedHash": "988d80e52c67c3692d43cc963b6a048a239895e88b272b061de55370d0f8efc3"
     },
     "tauri-v2": {
-      "source": "robinebers/openusage",
+      "source": "nodnarbnitram/claude-code-extensions",
       "sourceType": "github",
-      "computedHash": "1db1e63a480f53c3c86dae21d1cfc7eac3888e7e55e214084e58a1f16ce4d571"
+      "computedHash": "72248dbe36769a12c38c07437063cc5a1ad2d182fee87fb72d92a8fa37ce4a0f"
     },
     "test": {
       "source": "facebook/react",
       "sourceType": "github",
       "computedHash": "14fabeabacc8be3ea52f7dc209f45d132b2a81d4bdf2a67a73687865594a4d76"
     },
-    "ui-components": {
-      "source": "elie222/inbox-zero",
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
       "sourceType": "github",
-      "computedHash": "6cb241eead2f0760bf474fe1cada757ec0b59bd4d0dad72715bd0d8e44fed615"
+      "computedHash": "bbc31a48537b473ff4feea6360ef0de3bfdcbef26c14f4967a5deefe8ca801d3"
     },
     "verify": {
       "source": "facebook/react",
