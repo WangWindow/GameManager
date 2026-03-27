@@ -1,11 +1,7 @@
 {
-  // language specific settings
-  "[vue]": {
-    "editor.defaultFormatter": "Vue.volar",
-  },
   // extension settings
   "rust-analyzer.linkedProjects": [
     "src-tauri/Cargo.toml"
   ],
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
 }
