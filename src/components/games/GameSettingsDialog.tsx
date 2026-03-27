@@ -4,14 +4,12 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -20,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ENGINE_OPTION_RPGMAKER_NWJS,
+  ENGINE_OPTION_NWJS,
   ENGINE_PICKER_OPTIONS,
   normalizeEngineTypeForSelect,
   resolveSelectedEngineType,
@@ -33,6 +31,32 @@ import {
 } from "@/lib/api";
 import { useI18n } from "@/i18n";
 import type { GameConfig, GameDto } from "@/types";
+
+interface GameSettingsDialogProps {
+  open: boolean;
+  game: GameDto | null;
+  loading?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSave?: (payload: {
+    id: string;
+    title: string;
+    engineType: string;
+    path: string;
+    runtimeVersion?: string;
+    settings: GameConfig;
+  }) => void;
+  onRefreshCover?: (id: string) => void;
+}
+
+/** 简洁表单行 */
+function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[100px_1fr] items-center gap-3">
+      <label className="text-sm text-muted-foreground">{label}</label>
+      <div>{children}</div>
+    </div>
+  );
+}
 
 interface GameSettingsDialogProps {
   open: boolean;
@@ -79,7 +103,7 @@ export default function GameSettingsDialog({
   const [defaultBottle, setDefaultBottle] = useState("");
   const [bottleName, setBottleName] = useState("");
 
-  const isMvMz = useMemo(() => engineType === ENGINE_OPTION_RPGMAKER_NWJS, [engineType]);
+  const isNwjs = useMemo(() => engineType === ENGINE_OPTION_NWJS, [engineType]);
   const requiresEntryPath = useMemo(() => engineType === "other", [engineType]);
   const canSave = useMemo(() => {
     const basicValid = !!game && title.trim().length > 0 && path.trim().length > 0;
@@ -151,7 +175,7 @@ export default function GameSettingsDialog({
 
   async function handleSave() {
     if (!game) return;
-    const resolvedEngineType = resolveSelectedEngineType(engineType, game.engineType);
+    const resolvedEngineType = resolveSelectedEngineType(engineType);
     const args = argsText
       .split(/\s+/)
       .map((s) => s.trim())
@@ -292,202 +316,143 @@ export default function GameSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("gameSettings.title")}</DialogTitle>
-          <DialogDescription>{t("gameSettings.description")}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-3">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t("gameSettings.name")}</label>
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          <FormRow label={t("gameSettings.name")}>
+            <Input
+              value={title}
+              className="h-8 text-sm"
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </FormRow>
+
+          <FormRow label={t("gameSettings.engineType")}>
+            <Select value={engineType} onValueChange={(v) => setEngineType(v)}>
+              <SelectTrigger size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ENGINE_PICKER_OPTIONS.map((engine) => (
+                  <SelectItem key={engine.value} value={engine.value}>
+                    {engine.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormRow>
+
+          <FormRow label={t("gameSettings.gamePath")}>
+            <Input
+              value={path}
+              className="h-8 text-sm"
+              onChange={(e) => setPath(e.target.value)}
+            />
+          </FormRow>
+
+          <FormRow label={t("gameSettings.openDirs")}>
+            <div className="flex gap-1">
+              <Button variant="outline" size="xs" onClick={openGameDir}>
+                {t("gameSettings.openGameDir")}
+              </Button>
+              <Button variant="outline" size="xs" onClick={openProfileDir}>
+                {t("gameSettings.openProfileDir")}
+              </Button>
+            </div>
+          </FormRow>
+
+          <FormRow label={t("gameSettings.cover")}>
+            <div className="flex gap-1">
               <Input
-                value={title}
-                placeholder={t("gameSettings.namePlaceholder")}
-                onChange={(e) => setTitle(e.target.value)}
+                value={coverFile}
+                className="h-8 text-sm flex-1"
+                placeholder={t("gameSettings.coverPlaceholder")}
+                onChange={(e) => setCoverFile(e.target.value)}
               />
+              <Button variant="outline" size="sm" className="h-8 px-2" onClick={pickCoverFile}>
+                <Icon icon="ri:folder-open-line" className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-8" onClick={handleRefreshCover}>
+                <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
+              </Button>
             </div>
+          </FormRow>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t("gameSettings.engineType")}</label>
-              <Select value={engineType} onValueChange={(v) => setEngineType(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("gameSettings.engineTypePlaceholder")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {ENGINE_PICKER_OPTIONS.map((engine) => (
-                    <SelectItem key={engine.value} value={engine.value}>
-                      {engine.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t("gameSettings.gamePath")}</label>
+          {isNwjs && (
+            <FormRow label={t("gameSettings.nwjsVersion")}>
               <Input
-                value={path}
-                placeholder={t("gameSettings.gamePathPlaceholder")}
-                onChange={(e) => setPath(e.target.value)}
+                value={runtimeVersion}
+                className="h-8 text-sm"
+                placeholder="0.84.0"
+                onChange={(e) => setRuntimeVersion(e.target.value)}
               />
-            </div>
+            </FormRow>
+          )}
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t("gameSettings.openDirs")}</label>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" size="sm" onClick={openGameDir}>
-                  {t("gameSettings.openGameDir")}
-                </Button>
-                <Button variant="secondary" size="sm" onClick={openProfileDir}>
-                  {t("gameSettings.openProfileDir")}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t("gameSettings.cover")}</label>
-              <div className="flex items-center gap-2">
+          {/* 运行设置 */}
+          <div className="pt-2 border-t space-y-3">
+            <FormRow label={t("gameSettings.entryPath")}>
+              <div className="flex gap-1">
                 <Input
-                  value={coverFile}
-                  placeholder={t("gameSettings.coverPlaceholder")}
-                  onChange={(e) => setCoverFile(e.target.value)}
+                  value={entryPath}
+                  className="h-8 text-sm flex-1"
+                  placeholder={t("gameSettings.entryPathPlaceholder")}
+                  onChange={(e) => setEntryPath(e.target.value)}
                 />
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={pickCoverFile}
-                >
-                  …
+                <Button variant="outline" size="sm" className="h-8 px-2" onClick={pickEntryFile}>
+                  <Icon icon="ri:folder-open-line" className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={settingsLoading || !game}
-                  onClick={handleRefreshCover}
-                >
-                  {t("gameSettings.extractCover")}
-                </Button>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {t("gameSettings.coverHint")}
-              </div>
-            </div>
+            </FormRow>
 
-            {isMvMz && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {t("gameSettings.nwjsVersion")}
-                </label>
-                <Input
-                  value={runtimeVersion}
-                  placeholder={t("gameSettings.nwjsVersionPlaceholder")}
-                  onChange={(e) => setRuntimeVersion(e.target.value)}
-                />
-              </div>
+            {engineType === "other" && bottlesAvailable && bottlesInstalled && (
+              <FormRow label={t("gameSettings.bottlesBottle")}>
+                <Select
+                  value={bottleName}
+                  onValueChange={(v) => setBottleName(v)}
+                  disabled={bottlesLoading || bottlesList.length === 0 || !bottlesEnabled}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder={t("maintenance.selectBottle")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bottlesList.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
             )}
 
-            <div className="rounded-md border p-3">
-              <div className="mb-2 text-sm font-medium">{t("gameSettings.runtime")}</div>
-              {settingsLoading ? (
-                <div className="text-xs text-muted-foreground">
-                  {t("gameSettings.loading")}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("gameSettings.entryPath")}</label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={entryPath}
-                        placeholder={t("gameSettings.entryPathPlaceholder")}
-                        onChange={(e) => setEntryPath(e.target.value)}
-                      />
-                      <Button variant="secondary" size="sm" onClick={pickEntryFile}>
-                        {t("common.choose")}
-                      </Button>
-                    </div>
-                    {engineType === "other" && bottlesEnabled && bottlesAvailable && (
-                      <div className="text-xs text-muted-foreground">
-                        {t("gameSettings.bottlesProgramHint")}
-                      </div>
-                    )}
-                  </div>
+            <FormRow label={t("gameSettings.args")}>
+              <Input
+                value={argsText}
+                className="h-8 text-sm"
+                placeholder="--debug"
+                onChange={(e) => setArgsText(e.target.value)}
+              />
+            </FormRow>
 
-                  {engineType === "other" && bottlesAvailable && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">{t("gameSettings.bottlesBottle")}</div>
-
-                      {!bottlesInstalled ? (
-                        <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
-                          <div className="mb-1">{t("gameSettings.bottlesUnavailable")}</div>
-                          <div>{t("gameSettings.bottlesUnavailableHint")}</div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Select
-                            value={bottleName}
-                            onValueChange={(v) => setBottleName(v)}
-                            disabled={
-                              bottlesLoading || bottlesList.length === 0 || !bottlesEnabled
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={t("maintenance.selectBottle")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {bottlesList.map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <div className="text-xs text-muted-foreground">
-                            {t("gameSettings.defaultBottleHint")}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("gameSettings.args")}</label>
-                    <Input
-                      value={argsText}
-                      placeholder={t("gameSettings.argsPlaceholder")}
-                      onChange={(e) => setArgsText(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                    <div>
-                      <div className="text-sm font-medium">{t("gameSettings.sandboxHome")}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {t("gameSettings.sandboxHomeDesc")}
-                      </div>
-                    </div>
-                    <Switch
-                      checked={sandboxHome}
-                      onCheckedChange={(v) => setSandboxHome(Boolean(v))}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            <FormRow label={t("gameSettings.sandboxHome")}>
+              <Switch
+                checked={sandboxHome}
+                onCheckedChange={(v) => setSandboxHome(Boolean(v))}
+              />
+            </FormRow>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange?.(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={!canSave || loading} className="gap-2" onClick={handleSave}>
-            {loading && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin" />}
+          <Button size="sm" disabled={!canSave || loading} onClick={handleSave}>
+            {loading && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin mr-1" />}
             {t("common.save")}
           </Button>
         </DialogFooter>

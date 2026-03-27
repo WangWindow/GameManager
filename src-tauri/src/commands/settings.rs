@@ -115,7 +115,6 @@ pub async fn download_nwjs_stable(
             &engine_service,
             &app,
             current_id.as_deref(),
-            &result.version,
             result.flavor,
         )
         .await?;
@@ -210,7 +209,6 @@ async fn prune_old_nwjs_engines(
     engine_service: &EngineService,
     app: &AppHandle,
     keep_id: Option<&str>,
-    keep_version: &str,
     keep_flavor: nwjs::NwjsFlavor,
 ) -> Result<(), String> {
     let engines = engine_service.get_all_engines().await?;
@@ -225,10 +223,6 @@ async fn prune_old_nwjs_engines(
         if keep_id == Some(engine.id.as_str()) {
             continue;
         }
-        if engine.version == keep_version {
-            continue;
-        }
-
         remove_engine_path_if_owned(app, &engine.path);
         engine_service.delete_engine(&engine.id).await?;
     }

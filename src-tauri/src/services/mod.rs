@@ -6,6 +6,7 @@ pub mod download;
 pub mod engine_manager;
 pub mod game_launcher;
 pub mod game_manager;
+pub mod logger;
 
 // 扩展目录（插件化）
 pub mod extension;

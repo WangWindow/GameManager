@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -76,35 +75,32 @@ export default function ImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("import.title")}</DialogTitle>
-          <DialogDescription>{t("import.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">{t("import.executable")}</label>
+            <label className="text-sm">{t("import.executable")}</label>
             <div className="flex gap-2">
               <Input
                 value={executablePath}
                 placeholder={t("import.executablePlaceholder")}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExecutablePath(e.target.value)}
+                className="h-8 text-sm"
               />
-              <Button variant="secondary" className="px-3" onClick={pickExecutable}>
-                <Icon icon="ri:file-3-line" className="h-4 w-4" />
+              <Button variant="outline" size="sm" className="h-8 px-2" onClick={pickExecutable}>
+                <Icon icon="ri:folder-open-line" className="h-4 w-4" />
               </Button>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {t("import.executableHint")}
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">{t("import.engineType")}</label>
+            <label className="text-sm">{t("import.engineType")}</label>
             <Select value={engineType} onValueChange={(v) => setEngineType(v)}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("import.selectEnginePlaceholder")} />
+              <SelectTrigger size="sm">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {ENGINE_PICKER_OPTIONS.map((engine) => (
@@ -118,10 +114,10 @@ export default function ImportDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange?.(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={!executablePath || loading} className="gap-2" onClick={handleSubmit}>
+          <Button size="sm" disabled={!executablePath || loading} className="gap-2" onClick={handleSubmit}>
             {loading && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin" />}
             {t("common.import")}
           </Button>

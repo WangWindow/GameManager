@@ -1,4 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+/**
+ * GameManager 主应用组件
+ *
+ * 游戏管理器的核心入口，负责：
+ * - 游戏列表展示和操作（启动、编辑、删除）
+ * - 游戏导入和目录扫描
+ * - 设置和维护功能管理
+ * - 拖拽导入支持
+ * - 状态栏任务进度显示
+ */
+
+import { useEffect, useMemo, useCallback } from "react";
 import TitleBar from "@/components/layouts/TitleBar";
 import ImportDialog from "@/components/games/ImportDialog";
 import ScanDialog from "@/components/games/ScanDialog";
@@ -19,39 +30,50 @@ import { useTaskStatus } from "@/hooks/useTaskStatus";
 import { useTauriEvents } from "@/hooks/useTauriEvents";
 import { useGameLibraryActions } from "@/hooks/useGameLibraryActions";
 import { useMaintenanceActions } from "@/hooks/useMaintenanceActions";
+import { useDialogState, useDeleteConfirmState } from "@/hooks/useDialogState";
+import { useDragDrop } from "@/hooks/useDragDrop";
+import { usePersistedState, usePersistedBoolean } from "@/hooks/usePersistedState";
 import {
   ENGINE_FILTER_OPTIONS,
-  ENGINE_OPTION_RPGMAKER_NWJS,
+  ENGINE_OPTION_NWJS,
 } from "@/constants/engines";
 
+/** 游戏列表视图模式 */
 export type ViewMode = "grid" | "list";
 
 export default function App() {
-  const [manageOpen, setManageOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [scanOpen, setScanOpen] = useState(false);
-  const [showStatusBar, setShowStatusBar] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [engineFilter, setEngineFilter] = useState("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [gameSettingsOpen, setGameSettingsOpen] = useState(false);
-  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [pendingDeleteTitle, setPendingDeleteTitle] = useState("");
-  const [pendingImportPath, setPendingImportPath] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
+  // ============ 对话框状态 ============
+  const manageDialog = useDialogState();
+  const settingsDialog = useDialogState();
+  const importDialog = useDialogState<string>(); // data: 待导入的文件路径
+  const scanDialog = useDialogState();
+  const gameSettingsDialog = useDialogState<string>(); // data: 游戏 ID
+  const deleteConfirm = useDeleteConfirmState();
 
+  // 持久化状态
+  const [showStatusBar, setShowStatusBar] = usePersistedBoolean("gm_show_status_bar", true);
+  const [viewMode, setViewMode] = usePersistedState<ViewMode>("gm_game_view_mode", "list");
+
+  // UI 状态
+  const [searchQuery, setSearchQuery] = usePersistedState("gm_search_query", "");
+  const [engineFilter, setEngineFilter] = usePersistedState("gm_engine_filter", "all");
+
+  // 拖拽导入
+  const { isDragging, droppedPath, clearDroppedPath } = useDragDrop();
+
+  // 处理拖拽导入
+  useEffect(() => {
+    if (droppedPath) {
+      importDialog.open(droppedPath);
+      clearDroppedPath();
+    }
+  }, [droppedPath, importDialog, clearDroppedPath]);
+
+  // 游戏数据
   const { games, loading, fetchGames, handleLaunchGame, handleDeleteGame } = useGames();
   const { themeMode, setThemeMode } = useThemeMode();
   const { currentTask, statusBarVisible: taskStatusVisible, updateTask } = useTaskStatus();
   useTauriEvents(updateTask);
-
-  const closeImportDialog = () => {
-    setImportOpen(false);
-    setPendingImportPath("");
-  };
 
   const {
     importLoading,
@@ -64,9 +86,9 @@ export default function App() {
   } = useGameLibraryActions({
     refresh: fetchGames,
     updateTask,
-    closeImport: closeImportDialog,
-    closeScan: () => setScanOpen(false),
-    closeGameSettings: () => setGameSettingsOpen(false),
+    closeImport: importDialog.close,
+    closeScan: scanDialog.close,
+    closeGameSettings: gameSettingsDialog.close,
   });
 
   const {
@@ -75,9 +97,9 @@ export default function App() {
     handleCleanupOldNwjs,
     handleUpdateEngine,
     handleRemoveEngine,
-  } =
-    useMaintenanceActions({ updateTask });
+  } = useMaintenanceActions({ updateTask });
 
+  // 过滤后的游戏列表
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return games.filter((game: GameDto) => {
@@ -87,193 +109,76 @@ export default function App() {
         game.engineType.toLowerCase().includes(query);
       const matchesType =
         engineFilter === "all" ||
-        (engineFilter === ENGINE_OPTION_RPGMAKER_NWJS
-          ? ["rpgmakermv", "rpgmakermz"].includes(game.engineType)
+        (engineFilter === ENGINE_OPTION_NWJS
+          ? ["rpgmakermv", "rpgmakermz", "rpgmakervx", "rpgmakervxace"].includes(game.engineType)
           : game.engineType === engineFilter);
       return matchesKeyword && matchesType;
     });
   }, [games, searchQuery, engineFilter]);
 
+  // 状态栏可见性
   const statusBarVisible = useMemo(
     () => showStatusBar && taskStatusVisible,
     [showStatusBar, taskStatusVisible],
   );
 
+  // 选中的游戏
   const selectedGame = useMemo(
-    () => (selectedGameId ? games.find((game) => game.id === selectedGameId) ?? null : null),
-    [games, selectedGameId],
+    () => (gameSettingsDialog.data ? games.find((game) => game.id === gameSettingsDialog.data) ?? null : null),
+    [games, gameSettingsDialog.data],
   );
 
-  const unlistenDragDropRef = useRef<(() => void) | null>(null);
-
-  const handleRefreshGamesEvent = () => {
+  // 刷新游戏列表事件
+  const handleRefreshGamesEvent = useCallback(() => {
     void fetchGames(true);
-  };
-
-  useEffect(() => {
-    localStorage.setItem("gm_show_status_bar", String(showStatusBar));
-  }, [showStatusBar]);
-
-  useEffect(() => {
-    localStorage.setItem("gm_game_view_mode", viewMode);
-  }, [viewMode]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("gm_show_status_bar");
-    if (saved !== null) setShowStatusBar(saved === "true");
-
-    const savedView = localStorage.getItem("gm_game_view_mode");
-    if (savedView === "grid" || savedView === "list") {
-      setViewMode(savedView);
-    }
-
-    fetchGames();
-    window.addEventListener("gm:refresh-games", handleRefreshGamesEvent);
-    void initDragDrop();
-
-    return () => {
-      window.removeEventListener("gm:refresh-games", handleRefreshGamesEvent);
-      teardownDomDragDrop();
-      if (typeof unlistenDragDropRef.current === "function") {
-        try {
-          unlistenDragDropRef.current();
-        } catch {
-          // ignore
-        }
-      }
-      unlistenDragDropRef.current = null;
-    };
   }, [fetchGames]);
 
-  async function initDragDrop() {
-    try {
-      const mod = await import("@tauri-apps/api/webviewWindow");
-      const win = mod.getCurrentWebviewWindow();
-      unlistenDragDropRef.current = await win.onDragDropEvent((event) => {
-        const payload = "payload" in event ? event.payload : event;
-        const type = (payload as { type?: string }).type ?? "";
-        const paths = (payload as { paths?: string[] }).paths ?? [];
+  useEffect(() => {
+    fetchGames();
+    window.addEventListener("gm:refresh-games", handleRefreshGamesEvent);
+    return () => {
+      window.removeEventListener("gm:refresh-games", handleRefreshGamesEvent);
+    };
+  }, [fetchGames, handleRefreshGamesEvent]);
 
-        if (type === "enter" || type === "over") {
-          setIsDragging(true);
-          return;
-        }
-
-        if (type === "leave") {
-          setIsDragging(false);
-          return;
-        }
-
-        if (type === "drop") {
-          setIsDragging(false);
-          const path = paths[0];
-          if (path) {
-            setPendingImportPath(path);
-            setImportOpen(true);
-            toast.info("已选择拖拽文件，请选择引擎类型");
-          } else {
-            toast.error("仅支持拖拽本地可执行文件");
-          }
-        }
-      });
-    } catch {
-      // Web 环境使用 DOM 事件兜底
-      setupDomDragDrop();
-    }
-  }
-
-  function setupDomDragDrop() {
-    window.addEventListener("dragenter", handleDragEnter);
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("dragleave", handleDragLeave);
-    window.addEventListener("drop", handleDrop);
-  }
-
-  function teardownDomDragDrop() {
-    window.removeEventListener("dragenter", handleDragEnter);
-    window.removeEventListener("dragover", handleDragOver);
-    window.removeEventListener("dragleave", handleDragLeave);
-    window.removeEventListener("drop", handleDrop);
-  }
-
-  function handleDragEnter(event: DragEvent) {
-    if (!event.dataTransfer?.types?.includes("Files")) return;
-    setIsDragging(true);
-  }
-
-  function handleDragOver(event: DragEvent) {
-    if (!event.dataTransfer?.types?.includes("Files")) return;
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = "copy";
-    }
-  }
-
-  function handleDragLeave(event: DragEvent) {
-    if (!event.dataTransfer?.types?.includes("Files")) return;
-    setIsDragging(false);
-  }
-
-  function handleDrop(event: DragEvent) {
-    if (!event.dataTransfer?.files?.length) {
-      setIsDragging(false);
-      return;
-    }
-    event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    const path = (file as File & { path?: string }).path;
-    setIsDragging(false);
-    if (!path) {
-      toast.error("仅支持拖拽本地可执行文件");
-      return;
-    }
-    setPendingImportPath(path);
-    setImportOpen(true);
-    toast.info("已选择拖拽文件，请选择引擎类型");
-  }
-
-  function openImportDialog() {
-    setPendingImportPath("");
-    setImportOpen(true);
-  }
-
-  async function onLaunchGame(id: string) {
+  // 游戏操作回调
+  const onLaunchGame = useCallback(async (id: string) => {
     const success = await handleLaunchGame(id);
     if (success) {
       toast.success("游戏启动成功");
     }
-  }
+  }, [handleLaunchGame]);
 
-  function onEditGame(id: string) {
-    setSelectedGameId(id);
-    setGameSettingsOpen(true);
-  }
+  const onEditGame = useCallback((id: string) => {
+    gameSettingsDialog.open(id);
+  }, [gameSettingsDialog]);
 
-  function onDeleteGame(id: string) {
+  const onDeleteGame = useCallback((id: string) => {
     const game = games.find((g) => g.id === id);
-    setPendingDeleteId(id);
-    setPendingDeleteTitle(game?.title ?? "");
-    setDeleteConfirmOpen(true);
-  }
+    deleteConfirm.open(id, game?.title ?? "");
+  }, [games, deleteConfirm]);
 
-  async function confirmDeleteGame() {
-    if (!pendingDeleteId) return;
-    const id = pendingDeleteId;
-    setDeleteConfirmOpen(false);
-    setPendingDeleteId(null);
+  const confirmDeleteGame = useCallback(async () => {
+    if (!deleteConfirm.id) return;
+    const id = deleteConfirm.id;
+    deleteConfirm.close();
     const success = await handleDeleteGame(id);
     if (success) {
       toast.success("游戏删除成功");
     }
-  }
+  }, [deleteConfirm, handleDeleteGame]);
+
+  const openImportDialog = useCallback(() => {
+    importDialog.open("");
+  }, [importDialog]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <TitleBar
-        onManage={() => setManageOpen(true)}
-        onSettings={() => setSettingsOpen(true)}
+        onManage={manageDialog.open}
+        onSettings={settingsDialog.open}
         onImport={openImportDialog}
-        onScan={() => setScanOpen(true)}
+        onScan={scanDialog.open}
       />
 
       <div className="flex flex-1 overflow-hidden pt-10">
@@ -308,26 +213,31 @@ export default function App() {
       </div>
 
       <ImportDialog
-        open={importOpen}
+        open={importDialog.isOpen}
         loading={importLoading}
-        initialExecutablePath={pendingImportPath}
-        onOpenChange={setImportOpen}
+        initialExecutablePath={importDialog.data ?? ""}
+        onOpenChange={importDialog.setOpen}
         onSubmit={handleImportSubmit}
       />
-      <ScanDialog open={scanOpen} loading={scanLoading} onOpenChange={setScanOpen} onSubmit={handleScanSubmit} />
+      <ScanDialog
+        open={scanDialog.isOpen}
+        loading={scanLoading}
+        onOpenChange={scanDialog.setOpen}
+        onSubmit={handleScanSubmit}
+      />
 
       <GameSettingsDialog
-        open={gameSettingsOpen}
+        open={gameSettingsDialog.isOpen}
         game={selectedGame}
         loading={saveLoading}
-        onOpenChange={setGameSettingsOpen}
+        onOpenChange={gameSettingsDialog.setOpen}
         onSave={handleGameSave}
         onRefreshCover={handleRefreshCover}
       />
 
       <ManagementDialog
-        open={manageOpen}
-        onOpenChange={setManageOpen}
+        open={manageDialog.isOpen}
+        onOpenChange={manageDialog.setOpen}
         onDownloadNwjs={handleDownloadNwjs}
         onCleanupOldNwjs={handleCleanupOldNwjs}
         onCleanupContainers={handleCleanupContainers}
@@ -336,18 +246,18 @@ export default function App() {
       />
 
       <SettingsDialog
-        open={settingsOpen}
+        open={settingsDialog.isOpen}
         themeMode={themeMode}
         showStatusBar={showStatusBar}
-        onOpenChange={setSettingsOpen}
+        onOpenChange={settingsDialog.setOpen}
         onThemeModeChange={setThemeMode}
         onShowStatusBarChange={setShowStatusBar}
       />
 
       <ConfirmDeleteDialog
-        open={deleteConfirmOpen}
-        title={pendingDeleteTitle}
-        onOpenChange={setDeleteConfirmOpen}
+        open={deleteConfirm.isOpen}
+        title={deleteConfirm.title}
+        onOpenChange={deleteConfirm.setOpen}
         onConfirm={confirmDeleteGame}
       />
 

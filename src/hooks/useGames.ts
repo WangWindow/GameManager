@@ -1,14 +1,25 @@
+/**
+ * 游戏数据管理 hook
+ *
+ * 提供游戏列表的 CRUD 操作和启动功能，包含本地缓存机制以提升性能
+ */
+
 import { useState, useCallback } from "react";
 import { getGames, addGame, updateGame, deleteGame, launchGame } from "@/lib/api";
 import type { GameDto, AddGameInput, UpdateGameInput } from "@/types";
 
+/** 游戏列表缓存过期时间 (10秒) */
 const GAMES_CACHE_TTL = 10_000;
 
-let gamesCache: {
+/** 游戏列表缓存结构 */
+interface GamesCache {
   expiresAt: number;
   data: GameDto[];
-} | null = null;
+}
 
+let gamesCache: GamesCache | null = null;
+
+/** 写入缓存 */
 function writeGamesCache(data: GameDto[]) {
   gamesCache = {
     data,
@@ -16,6 +27,7 @@ function writeGamesCache(data: GameDto[]) {
   };
 }
 
+/** 读取缓存 (过期则返回 null) */
 function readGamesCache(): GameDto[] | null {
   if (!gamesCache) return null;
   if (gamesCache.expiresAt < Date.now()) {
@@ -25,10 +37,12 @@ function readGamesCache(): GameDto[] | null {
   return gamesCache.data;
 }
 
+/** 使缓存失效 */
 function invalidateGamesCache() {
   gamesCache = null;
 }
 
+/** 按最后游玩时间排序游戏列表 */
 function mergeAndSortGames(games: GameDto[]): GameDto[] {
   return [...games].sort((a, b) => {
     const left = a.lastPlayedAt ?? a.createdAt;
@@ -37,6 +51,20 @@ function mergeAndSortGames(games: GameDto[]): GameDto[] {
   });
 }
 
+/**
+ * 游戏数据管理 hook
+ *
+ * @returns 游戏列表状态和操作函数
+ *
+ * @example
+ * const { games, loading, fetchGames, handleLaunchGame } = useGames()
+ *
+ * // 获取游戏列表
+ * useEffect(() => { fetchGames() }, [fetchGames])
+ *
+ * // 启动游戏
+ * const handleClick = () => handleLaunchGame(game.id)
+ */
 export function useGames() {
   const [games, setGames] = useState<GameDto[]>([]);
   const [loading, setLoading] = useState(false);

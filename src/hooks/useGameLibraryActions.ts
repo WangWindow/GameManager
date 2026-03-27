@@ -4,7 +4,7 @@ import { importGameDir, scanGames, saveGameSettings, updateGame, refreshGameCove
 import type { GameConfig } from "@/types";
 
 interface Options {
-  refresh: () => void;
+  refresh: (force?: boolean) => void | Promise<void>;
   updateTask: (label: string, progress: number) => void;
   closeImport: () => void;
   closeScan: () => void;
@@ -23,7 +23,7 @@ export function useGameLibraryActions(options: Options) {
       await importGameDir(payload.executablePath, payload.engineType);
       toast.success("导入成功");
       options.closeImport();
-      options.refresh();
+      await options.refresh(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "导入失败";
       if (typeof msg === "string" && msg.includes("已存在")) {
@@ -44,7 +44,7 @@ export function useGameLibraryActions(options: Options) {
       toast.success(`扫描完成：新增 ${res.imported}，已存在 ${res.skippedExisting}`);
       options.updateTask("扫描完成", 100);
       options.closeScan();
-      options.refresh();
+      await options.refresh(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "扫描失败";
       toast.error(msg);
@@ -73,7 +73,7 @@ export function useGameLibraryActions(options: Options) {
       await saveGameSettings(payload.id, payload.settings);
       toast.success("已保存游戏设置");
       options.closeGameSettings();
-      options.refresh();
+      await options.refresh(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "保存失败";
       toast.error(msg);
@@ -86,7 +86,7 @@ export function useGameLibraryActions(options: Options) {
     try {
       await refreshGameCover(id);
       toast.success("图标已更新");
-      options.refresh();
+      await options.refresh(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "图标更新失败";
       toast.error(msg);

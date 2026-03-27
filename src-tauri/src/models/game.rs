@@ -15,6 +15,10 @@ pub enum EngineType {
     RpgMakerMZ,
     /// RenPy视觉小说
     RenPy,
+    /// Unity 游戏引擎
+    Unity,
+    /// Godot 游戏引擎
+    Godot,
     /// 其他类型
     Other,
 }
@@ -28,6 +32,8 @@ impl EngineType {
             "rpgmakermv" | "rpg_maker_mv" => Self::RpgMakerMV,
             "rpgmakermz" | "rpg_maker_mz" => Self::RpgMakerMZ,
             "renpy" => Self::RenPy,
+            "unity" => Self::Unity,
+            "godot" => Self::Godot,
             _ => Self::Other,
         }
     }
@@ -40,6 +46,8 @@ impl EngineType {
             Self::RpgMakerMV => "rpgmakermv",
             Self::RpgMakerMZ => "rpgmakermz",
             Self::RenPy => "renpy",
+            Self::Unity => "unity",
+            Self::Godot => "godot",
             Self::Other => "other",
         }
     }

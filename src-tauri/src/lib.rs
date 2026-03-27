@@ -19,6 +19,19 @@ use tauri::menu::MenuBuilder;
 use tauri::tray::TrayIconBuilder;
 use tokio::sync::Mutex;
 
+/// 初始化日志系统
+fn init_logger(app: &tauri::AppHandle) -> Result<(), String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+
+    let log_dir = app_data_dir.join("logs");
+    let is_debug = cfg!(debug_assertions);
+
+    services::logger::init_logger(&log_dir, is_debug)
+}
+
 /// 初始化数据库
 async fn init_database(app: &tauri::AppHandle) -> Result<SqlitePool, String> {
     let app_data_dir = app
@@ -98,11 +111,20 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // 初始化日志系统（最先执行）
+            if let Err(e) = init_logger(app.handle()) {
+                eprintln!("日志系统初始化失败: {}", e);
+            }
+
+            tracing::info!("GameManager 启动中...");
+
             let handle = app.handle().clone();
 
             // 初始化数据库
             let pool = tauri::async_runtime::block_on(async move { init_database(&handle).await })
                 .expect("数据库初始化失败");
+
+            tracing::info!("数据库初始化完成");
 
             // 解析容器根目录
             let handle2 = app.handle().clone();
@@ -111,6 +133,8 @@ pub fn run() {
                 resolve_container_root(&handle2, &pool2).await
             })
             .unwrap_or_else(|_| default_container_root(app.handle()).unwrap());
+
+            tracing::debug!(container_root = %container_root.display(), "容器根目录");
 
             // 迁移profile目录命名
             let pool3 = pool.clone();
@@ -148,6 +172,8 @@ pub fn run() {
 
             // 设置托盘
             setup_tray(app.handle())?;
+
+            tracing::info!("GameManager 启动完成");
 
             Ok(())
         })

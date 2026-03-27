@@ -132,16 +132,128 @@ impl FileService {
     }
 
     /// 从可执行文件提取图标并保存到profile目录
+    ///
+    /// 支持:
+    /// - Windows PE 文件 (.exe)
+    /// - 游戏目录中的图片文件作为 fallback
+    ///
+    /// 图标会被转换为 PNG 格式以获得更好的兼容性
     pub fn save_exe_icon_to_profile(
         &self,
         container_root: &Path,
         profile_key: &str,
         exe_path: &Path,
     ) -> Option<PathBuf> {
-        let temp_dir = tempfile::tempdir().ok()?;
-        let extracted = self.extract_exe_icon_to_dir(exe_path, temp_dir.path())?;
-        self.save_cover_to_profile(container_root, profile_key, &extracted)
-            .ok()
+        let game_dir = exe_path.parent()?;
+
+        // 策略1: 尝试从可执行文件提取图标
+        if let Some(icon_data) = self.extract_pe_icon(exe_path) {
+            if let Some(path) = self.save_icon_data_to_profile(
+                container_root,
+                profile_key,
+                &icon_data,
+                "exe",
+            ) {
+                tracing::debug!(profile_key = %profile_key, "从可执行文件提取图标成功");
+                return Some(path);
+            }
+        }
+
+        // 策略2: 尝试查找同名图片文件
+        if let Some(sidecar) = self.find_sidecar_icon(exe_path) {
+            if let Ok(path) = self.save_cover_to_profile(container_root, profile_key, &sidecar) {
+                tracing::debug!(profile_key = %profile_key, "使用同名图片文件");
+                return Some(path);
+            }
+        }
+
+        // 策略3: 在 icon/icons 目录中查找
+        if let Some(icon_image) = self.find_icon_dir_image(game_dir) {
+            if let Ok(path) = self.save_cover_to_profile(container_root, profile_key, &icon_image) {
+                tracing::debug!(profile_key = %profile_key, "使用 icon 目录图片");
+                return Some(path);
+            }
+        }
+
+        // 策略4: 使用游戏目录中的封面图
+        if let Some(cover) = self.find_cover_image(game_dir) {
+            if let Ok(path) = self.save_cover_to_profile(container_root, profile_key, &cover) {
+                tracing::debug!(profile_key = %profile_key, "使用游戏目录封面图");
+                return Some(path);
+            }
+        }
+
+        tracing::debug!(profile_key = %profile_key, "未能找到或提取图标");
+        None
+    }
+
+    /// 查找与可执行文件同名的图片
+    fn find_sidecar_icon(&self, exe_path: &Path) -> Option<PathBuf> {
+        let parent = exe_path.parent()?;
+        let stem = exe_path.file_stem()?.to_str()?;
+
+        let extensions = ["png", "ico", "jpg", "jpeg", "webp"];
+        let patterns = [
+            format!("{}", stem),
+            format!("{}-icon", stem),
+            format!("{}_icon", stem),
+            format!("{}Icon", stem),
+        ];
+
+        for pattern in &patterns {
+            for ext in &extensions {
+                let candidate = parent.join(format!("{}.{}", pattern, ext));
+                if candidate.exists() && candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// 保存图标数据到 profile 目录
+    fn save_icon_data_to_profile(
+        &self,
+        container_root: &Path,
+        profile_key: &str,
+        icon_data: &[u8],
+        source: &str,
+    ) -> Option<PathBuf> {
+        let profile_dir = self.game_profile_dir(container_root, profile_key);
+        ensure_dir(&profile_dir).ok()?;
+
+        // 尝试将 ICO 转换为 PNG 以获得更好的兼容性
+        let (data, ext) = self.convert_icon_to_png(icon_data).unwrap_or_else(|| {
+            (icon_data.to_vec(), "ico")
+        });
+
+        let target = profile_dir.join(format!("cover.{}", ext));
+        std::fs::write(&target, data).ok()?;
+
+        tracing::debug!(
+            profile_key = %profile_key,
+            source = %source,
+            format = %ext,
+            "保存图标成功"
+        );
+
+        Some(target)
+    }
+
+    /// 将 ICO 格式转换为 PNG
+    fn convert_icon_to_png(&self, ico_data: &[u8]) -> Option<(Vec<u8>, &'static str)> {
+        use std::io::Cursor;
+
+        // 尝试加载 ICO 文件
+        let img = image::load_from_memory_with_format(ico_data, image::ImageFormat::Ico).ok()?;
+
+        // 编码为 PNG
+        let mut png_data = Vec::new();
+        let mut cursor = Cursor::new(&mut png_data);
+        img.write_to(&mut cursor, image::ImageFormat::Png).ok()?;
+
+        Some((png_data, "png"))
     }
 
     /// 保存封面到profile目录并返回保存路径
@@ -202,25 +314,55 @@ impl FileService {
         }
     }
 
-    fn extract_exe_icon_to_dir(&self, exe_path: &Path, out_dir: &Path) -> Option<PathBuf> {
-        let icon = self.extract_pe_icon(exe_path)?;
-        let target = out_dir.join("icon.ico");
-        std::fs::write(&target, icon).ok()?;
-        Some(target)
-    }
-
+    /// 从 PE 文件提取图标
+    ///
+    /// 支持 PE32 和 PE64 格式的 Windows 可执行文件
     fn extract_pe_icon(&self, exe_path: &Path) -> Option<Vec<u8>> {
-        let file = pelite::FileMap::open(exe_path).ok()?;
+        // 检查文件扩展名
+        let ext = exe_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        if ext != "exe" {
+            tracing::debug!(path = %exe_path.display(), "非 exe 文件，跳过图标提取");
+            return None;
+        }
+
+        let file = match pelite::FileMap::open(exe_path) {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::debug!(
+                    path = %exe_path.display(),
+                    error = %e,
+                    "无法打开 PE 文件"
+                );
+                return None;
+            }
+        };
+
         let bytes = file.as_ref();
 
+        // 尝试解析为 PE64
         if let Ok(pe) = pelite::pe64::PeFile::from_bytes(bytes) {
-            return self.extract_pe_icon_from_resources(pe.resources().ok()?);
+            if let Ok(resources) = pe.resources() {
+                if let Some(icon) = self.extract_pe_icon_from_resources(resources) {
+                    return Some(icon);
+                }
+            }
         }
 
+        // 尝试解析为 PE32
         if let Ok(pe) = pelite::pe32::PeFile::from_bytes(bytes) {
-            return self.extract_pe_icon_from_resources(pe.resources().ok()?);
+            if let Ok(resources) = pe.resources() {
+                if let Some(icon) = self.extract_pe_icon_from_resources(resources) {
+                    return Some(icon);
+                }
+            }
         }
 
+        tracing::debug!(path = %exe_path.display(), "PE 文件中未找到图标资源");
         None
     }
 

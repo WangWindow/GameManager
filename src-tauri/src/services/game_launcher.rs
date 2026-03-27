@@ -58,7 +58,8 @@ impl LauncherService {
                 self.launch_renpy_game(game, game_path, container_root, &options)
                     .await?
             }
-            EngineType::Other => {
+            // Unity 和 Godot 游戏使用通用启动方式
+            EngineType::Unity | EngineType::Godot | EngineType::Other => {
                 self.launch_other_game(game, game_path, container_root, &options)
                     .await?
             }

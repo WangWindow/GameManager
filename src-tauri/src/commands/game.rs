@@ -93,6 +93,9 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         .await?
         .ok_or_else(|| format!("游戏不存在: {}", id))?;
 
+    // 记录启动日志
+    crate::services::logger::log_game_launch(&id, &game.title, &game.engine_type);
+
     // 更新最后游玩时间
     game_service.update_last_played(&id).await?;
     drop(game_service);
@@ -231,6 +234,7 @@ pub async fn import_game_dir(
         &engine_type,
         game_dir,
         entry_exe,
+        false,
     )
     .await;
 
@@ -270,6 +274,11 @@ pub async fn scan_games(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<ScanGamesResult, String> {
+    let scan_start = std::time::Instant::now();
+
+    // 记录扫描开始
+    crate::services::logger::log_scan_start(&input.root, input.max_depth);
+
     let service = state.game_service.lock().await;
     let file_service = FileService::new();
 
@@ -341,6 +350,23 @@ pub async fn scan_games(
                 existing_paths.insert(path_str);
                 imported += 1;
 
+                let mut entry_exe: Option<PathBuf> = None;
+                if EngineType::from_str(&engine_type) == EngineType::RenPy {
+                    entry_exe = find_renpy_launch_script(&dir);
+                    if let Some(entry) = entry_exe.as_deref() {
+                        let config_path =
+                            file_service.game_config_path(&root_path, &game.profile_key);
+                        if file_service
+                            .ensure_game_dirs(&root_path, &game.profile_key)
+                            .is_ok()
+                        {
+                            let mut config = default_game_config(&game);
+                            config.entry_path = normalize_path(entry);
+                            let _ = file_service.write_game_config(&config_path, &config);
+                        }
+                    }
+                }
+
                 update_game_cover(
                     &service,
                     &file_service,
@@ -348,7 +374,8 @@ pub async fn scan_games(
                     &game,
                     &engine_type,
                     &dir,
-                    None,
+                    entry_exe.as_deref(),
+                    false,
                 )
                 .await;
             }
@@ -385,6 +412,10 @@ pub async fn scan_games(
         }),
     );
 
+    // 记录扫描完成
+    let duration_ms = scan_start.elapsed().as_millis() as u64;
+    crate::services::logger::log_scan_complete(imported as usize, skipped_existing as usize, duration_ms);
+
     Ok(ScanGamesResult {
         scanned_dirs,
         found_games,
@@ -402,7 +433,17 @@ async fn update_game_cover(
     engine_type: &str,
     game_dir: &Path,
     entry_exe: Option<&Path>,
-) {
+    force_extract: bool,
+) -> bool {
+    if !force_extract
+        && let Some(existing) = resolve_existing_cover(file_service, root, game)
+    {
+        let _ = service
+            .update_cover_path(&game.id, Some(existing.to_string_lossy().to_string()))
+            .await;
+        return true;
+    }
+
     let saved = resolve_cover_for_game(
         file_service,
         root,
@@ -429,7 +470,10 @@ async fn update_game_cover(
                 let _ = file_service.write_game_config(&config_path, &config);
             }
         }
+        return true;
     }
+
+    false
 }
 
 fn resolve_cover_for_game(
@@ -441,10 +485,7 @@ fn resolve_cover_for_game(
     entry_exe: Option<&Path>,
 ) -> Option<PathBuf> {
     let engine = EngineType::from_str(engine_type);
-    let exe_candidate = entry_exe
-        .filter(|p| p.exists() && p.is_file())
-        .map(|p| p.to_path_buf())
-        .or_else(|| find_executable_for_icon(engine.clone(), game_dir));
+    let exe_candidate = resolve_exe_candidate_for_icon(engine.clone(), game_dir, entry_exe);
 
     let save_image = |path: &Path| {
         file_service
@@ -473,17 +514,8 @@ fn resolve_cover_for_game(
                 return save_image(&cover);
             }
         }
-        EngineType::RenPy => {
-            if let Some(exe) = exe_candidate.as_deref() {
-                if let Some(saved) = save_exe_icon(exe) {
-                    return Some(saved);
-                }
-            }
-            if let Some(cover) = file_service.find_cover_image(game_dir) {
-                return save_image(&cover);
-            }
-        }
-        EngineType::Other => {
+        // Unity、Godot、RenPy 和其他引擎使用相同的封面提取策略
+        EngineType::RenPy | EngineType::Unity | EngineType::Godot | EngineType::Other => {
             if let Some(exe) = exe_candidate.as_deref() {
                 if let Some(saved) = save_exe_icon(exe) {
                     return Some(saved);
@@ -496,6 +528,103 @@ fn resolve_cover_for_game(
     }
 
     None
+}
+
+fn resolve_existing_cover(file_service: &FileService, root: &Path, game: &Game) -> Option<PathBuf> {
+    if let Some(current) = game.cover_path.as_deref() {
+        let path = PathBuf::from(current);
+        if path.exists() && path.is_file() {
+            return Some(path);
+        }
+    }
+
+    let config_path = file_service.game_config_path(root, &game.profile_key);
+    if config_path.exists()
+        && let Ok(config) = file_service.read_game_config(&config_path)
+        && let Some(cover_file) = config.cover_file
+    {
+        let profile_dir = file_service.game_profile_dir(root, &game.profile_key);
+        let cover_path = if Path::new(&cover_file).is_absolute() {
+            PathBuf::from(&cover_file)
+        } else {
+            profile_dir.join(&cover_file)
+        };
+        if cover_path.exists() && cover_path.is_file() {
+            return Some(cover_path);
+        }
+    }
+
+    let profile_dir = file_service.game_profile_dir(root, &game.profile_key);
+    if !profile_dir.exists() || !profile_dir.is_dir() {
+        return None;
+    }
+
+    if let Ok(entries) = std::fs::read_dir(&profile_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if matches!(
+                ext.as_str(),
+                "png" | "jpg" | "jpeg" | "webp" | "bmp" | "ico"
+            ) {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn resolve_exe_candidate_for_icon(
+    engine: EngineType,
+    game_dir: &Path,
+    entry_exe: Option<&Path>,
+) -> Option<PathBuf> {
+    let entry = entry_exe
+        .filter(|p| p.exists() && p.is_file())
+        .map(|p| p.to_path_buf());
+
+    match engine {
+        EngineType::RenPy => {
+            if let Some(entry_path) = entry.as_deref() {
+                if let Some(path) = resolve_renpy_icon_exe(entry_path, game_dir) {
+                    return Some(path);
+                }
+            }
+            find_executable_for_icon(EngineType::RenPy, game_dir)
+        }
+        _ => entry.or_else(|| find_executable_for_icon(engine, game_dir)),
+    }
+}
+
+fn resolve_renpy_icon_exe(entry_exe: &Path, game_dir: &Path) -> Option<PathBuf> {
+    let ext = entry_exe
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if ext == "exe" {
+        return Some(entry_exe.to_path_buf());
+    }
+
+    if ext == "sh" {
+        let sibling_exe = entry_exe.with_extension("exe");
+        if sibling_exe.exists() && sibling_exe.is_file() {
+            return Some(sibling_exe);
+        }
+    }
+
+    let sibling_dir = entry_exe.parent().unwrap_or(game_dir);
+    find_root_windows_exe(sibling_dir, &["renpy", "python"])
+        .or_else(|| find_root_windows_exe(game_dir, &["renpy", "python"]))
 }
 
 fn find_executable_for_icon(engine: EngineType, game_dir: &Path) -> Option<PathBuf> {
@@ -516,8 +645,111 @@ fn find_executable_for_icon(engine: EngineType, game_dir: &Path) -> Option<PathB
         )
         .or_else(|| find_root_windows_exe(game_dir, &[])),
         EngineType::RenPy => find_root_windows_exe(game_dir, &["renpy", "python"]),
+        EngineType::Unity => find_unity_executable(game_dir),
+        EngineType::Godot => find_godot_executable(game_dir),
         EngineType::Other => find_root_windows_exe(game_dir, &[]),
     }
+}
+
+/// 查找 Unity 游戏可执行文件
+fn find_unity_executable(game_dir: &Path) -> Option<PathBuf> {
+    // 首先尝试查找与 *_Data 目录同名的可执行文件
+    if let Ok(entries) = std::fs::read_dir(game_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with("_Data") && entry.path().is_dir() {
+                let exe_name = name.trim_end_matches("_Data");
+                let exe_path = game_dir.join(format!("{}.exe", exe_name));
+                if exe_path.exists() {
+                    return Some(exe_path);
+                }
+                // Linux 可执行文件
+                let linux_exe = game_dir.join(exe_name);
+                if linux_exe.exists() && linux_exe.is_file() {
+                    return Some(linux_exe);
+                }
+            }
+        }
+    }
+    // Fallback: 查找任意 Windows 可执行文件
+    find_root_windows_exe(game_dir, &["UnityCrashHandler", "CrashHandler"])
+}
+
+/// 查找 Godot 游戏可执行文件
+fn find_godot_executable(game_dir: &Path) -> Option<PathBuf> {
+    // 查找与 .pck 文件同名的可执行文件
+    if let Ok(entries) = std::fs::read_dir(game_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with(".pck") {
+                let exe_name = name.trim_end_matches(".pck");
+                let exe_path = game_dir.join(format!("{}.exe", exe_name));
+                if exe_path.exists() {
+                    return Some(exe_path);
+                }
+                // Linux 可执行文件
+                let linux_exe = game_dir.join(exe_name);
+                if linux_exe.exists() && linux_exe.is_file() {
+                    return Some(linux_exe);
+                }
+            }
+        }
+    }
+    // Fallback: 查找任意 Windows 可执行文件
+    find_root_windows_exe(game_dir, &[])
+}
+
+fn find_renpy_launch_script(game_dir: &Path) -> Option<PathBuf> {
+    let dir_name = game_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mut fallback: Option<PathBuf> = None;
+    if let Ok(entries) = std::fs::read_dir(game_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if ext != "sh" {
+                continue;
+            }
+
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+
+            if !dir_name.is_empty() && stem == dir_name {
+                return Some(path);
+            }
+            if stem == "renpy" {
+                continue;
+            }
+            if fallback.is_none() {
+                fallback = Some(path);
+            }
+        }
+    }
+
+    if fallback.is_some() {
+        return fallback;
+    }
+
+    let renpy_sh = game_dir.join("renpy.sh");
+    if renpy_sh.exists() && renpy_sh.is_file() {
+        return Some(renpy_sh);
+    }
+
+    None
 }
 
 fn find_executable_by_candidates(game_dir: &Path, candidates: &[&str]) -> Option<PathBuf> {
@@ -598,8 +830,12 @@ fn fill_cover_from_config(
     game: &Game,
     mut dto: GameDto,
 ) -> GameDto {
-    if dto.cover_path.is_some() {
-        return dto;
+    if let Some(path) = dto.cover_path.as_deref() {
+        let exists = Path::new(path).exists();
+        if exists {
+            return dto;
+        }
+        dto.cover_path = None;
     }
 
     let config_path = file_service.game_config_path(root, &game.profile_key);
@@ -740,7 +976,7 @@ pub async fn refresh_game_cover(id: String, state: State<'_, AppState>) -> Resul
     };
 
     let resolved_engine = normalize_engine_type(&game);
-    update_game_cover(
+    let refreshed = update_game_cover(
         &service,
         &file_service,
         &root,
@@ -748,8 +984,13 @@ pub async fn refresh_game_cover(id: String, state: State<'_, AppState>) -> Resul
         &resolved_engine,
         Path::new(&game.path),
         entry_exe.as_deref(),
+        true,
     )
     .await;
+
+    if !refreshed {
+        return Err("未找到可提取的图标，请确认入口或同目录 .exe 是否存在".to_string());
+    }
 
     let updated = service
         .get_game_by_id(&id)
@@ -840,6 +1081,8 @@ fn detect_engine_with_score(path: &Path) -> Option<(String, i32)> {
     let renpy_score = score_renpy(path);
     let vxace_score = score_rpg_maker_vxace(path);
     let vx_score = score_rpg_maker_vx(path);
+    let unity_score = score_unity(path);
+    let godot_score = score_godot(path);
 
     let candidates = [
         ("rpgmakermz", mz_score, 1),
@@ -847,6 +1090,8 @@ fn detect_engine_with_score(path: &Path) -> Option<(String, i32)> {
         ("renpy", renpy_score, 0),
         ("rpgmakervxace", vxace_score, 3),
         ("rpgmakervx", vx_score, 4),
+        ("unity", unity_score, 5),
+        ("godot", godot_score, 6),
     ];
 
     let mut best: Option<(&str, i32, i32)> = None;
@@ -872,6 +1117,8 @@ fn min_engine_score(engine: &str) -> i32 {
         "rpgmakermz" | "rpgmakermv" => 4,
         "renpy" => 4,
         "rpgmakervxace" | "rpgmakervx" => 5,
+        "unity" => 4,
+        "godot" => 4,
         _ => 0,
     }
 }
@@ -960,6 +1207,100 @@ fn score_rpg_maker_vx(path: &Path) -> i32 {
     if path.join("Game.ini").exists() {
         score += 1;
     }
+    score
+}
+
+/// Unity 游戏检测评分
+///
+/// 检测特征:
+/// - UnityPlayer.dll (Windows)
+/// - *_Data 目录 (包含 Managed, Resources 等)
+/// - MonoBleedingEdge 目录
+/// - globalgamemanagers 文件
+fn score_unity(path: &Path) -> i32 {
+    let mut score = 0;
+
+    // 检测 UnityPlayer.dll (Windows)
+    if path.join("UnityPlayer.dll").exists() {
+        score += 3;
+    }
+
+    // 检测 *_Data 目录
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with("_Data") && entry.path().is_dir() {
+                let data_dir = entry.path();
+                score += 2;
+
+                // 检测 Data 目录中的特征文件
+                if data_dir.join("Managed").is_dir() {
+                    score += 1;
+                }
+                if data_dir.join("globalgamemanagers").exists()
+                    || data_dir.join("mainData").exists()
+                {
+                    score += 1;
+                }
+                break;
+            }
+        }
+    }
+
+    // 检测 MonoBleedingEdge 目录
+    if path.join("MonoBleedingEdge").is_dir() {
+        score += 1;
+    }
+
+    // 检测 IL2CPP 后端
+    if path.join("GameAssembly.dll").exists() {
+        score += 2;
+    }
+
+    score
+}
+
+/// Godot 游戏检测评分
+///
+/// 检测特征:
+/// - .pck 文件 (游戏资源包)
+/// - godot 相关 DLL/库文件
+/// - .import 目录
+fn score_godot(path: &Path) -> i32 {
+    let mut score = 0;
+
+    // 检测 .pck 文件
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.ends_with(".pck") {
+                score += 3;
+                break;
+            }
+        }
+    }
+
+    // 检测 Godot 库文件
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.contains("godot") && (name.ends_with(".dll") || name.ends_with(".so")) {
+                score += 2;
+                break;
+            }
+        }
+    }
+
+    // 检测 .import 目录 (编辑器项目)
+    if path.join(".import").is_dir() || path.join(".godot").is_dir() {
+        score += 1;
+    }
+
+    // 检测 project.godot 文件 (编辑器项目)
+    if path.join("project.godot").exists() {
+        score += 2;
+    }
+
     score
 }
 

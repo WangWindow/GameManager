@@ -170,7 +170,7 @@ pub async fn update_engine(
         .map(|v| v != "0")
         .unwrap_or(true);
     if keep_latest {
-        prune_old_nwjs_engines(&service, &app, &engine.id, &info.version, &engine.name).await?;
+        prune_old_nwjs_engines(&service, &app, &engine.id, &engine.name).await?;
     }
 
     Ok(EngineUpdateResult {
@@ -186,7 +186,6 @@ async fn prune_old_nwjs_engines(
     service: &EngineService,
     app: &AppHandle,
     keep_id: &str,
-    keep_version: &str,
     keep_name: &str,
 ) -> Result<(), String> {
     let keep_is_sdk = keep_name.to_lowercase().contains("sdk");
@@ -201,7 +200,7 @@ async fn prune_old_nwjs_engines(
         if is_sdk != keep_is_sdk {
             continue;
         }
-        if item.id == keep_id || item.version == keep_version {
+        if item.id == keep_id {
             continue;
         }
 

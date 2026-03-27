@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
+import { Icon } from "@iconify/react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -114,115 +112,109 @@ export default function ManagementDialog({
     }
   }, [open]);
 
+  /** 简化布局行 */
+  const FormRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 flex justify-end">{children}</div>
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("maintenance.title")}</DialogTitle>
-          <DialogDescription>{t("maintenance.description")}</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[60vh] pr-3">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Button variant="secondary" className="w-full justify-start" onClick={onDownloadNwjs}>
-                {t("maintenance.installOrUpdateNwjs")}
-              </Button>
-              <Button variant="secondary" className="w-full justify-start" onClick={onCleanupOldNwjs}>
-                {t("maintenance.cleanupOldNwjs")}
-              </Button>
-              <Button variant="secondary" className="w-full justify-start" onClick={onCleanupContainers}>
-                {t("maintenance.cleanupUnusedContainers")}
+
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          {/* 快速操作 */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={onDownloadNwjs}>
+              <Icon icon="ri:download-line" className="h-3.5 w-3.5 mr-1" />
+              {t("maintenance.installNwjs")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={onCleanupOldNwjs}>
+              <Icon icon="ri:delete-bin-line" className="h-3.5 w-3.5 mr-1" />
+              {t("maintenance.cleanupOld")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={onCleanupContainers}>
+              <Icon icon="ri:folder-reduce-line" className="h-3.5 w-3.5 mr-1" />
+              {t("maintenance.cleanupContainers")}
+            </Button>
+          </div>
+
+          {/* 已安装运行时 */}
+          <div className="pt-2 border-t space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">{t("maintenance.runtimes")}</span>
+              <Button variant="ghost" size="xs" disabled={loading} onClick={fetchEngines}>
+                <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
               </Button>
             </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">{t("maintenance.installedRuntimes")}</div>
-                <Button variant="ghost" size="sm" disabled={loading} onClick={fetchEngines}>
-                  {t("common.refresh")}
-                </Button>
+            {engines.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2">
+                {t("maintenance.noRuntimes")}
               </div>
-              {engines.length === 0 ? (
-                <div className="text-xs text-muted-foreground">
-                  {t("maintenance.noRuntimes")}
-                </div>
-              ) : (
-                engines.map((engine) => (
+            ) : (
+              <div className="space-y-1">
+                {engines.map((engine) => (
                   <div
                     key={engine.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded border px-2 py-1.5 text-sm"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-medium">{engine.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {t("maintenance.runtimeMeta", {
-                          type: engine.engineType,
-                          version: engine.version,
-                        })}
-                      </div>
+                      <span className="truncate">{engine.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2">v{engine.version}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => onUpdateEngine?.(engine)}>
-                        {t("common.update")}
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="xs" onClick={() => onUpdateEngine?.(engine)}>
+                        <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => onRemoveEngine?.(engine)}>
-                        {t("common.uninstall")}
+                      <Button variant="ghost" size="xs" className="text-destructive" onClick={() => onRemoveEngine?.(engine)}>
+                        <Icon icon="ri:delete-bin-line" className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
-                ))
-              )}
-              <div className="text-xs text-muted-foreground">
-                {t("maintenance.nwjsHint")}
+                ))}
               </div>
-            </div>
+            )}
+          </div>
 
-            <Separator />
+          {/* Bottles 集成 */}
+          {bottlesAvailable && (
+            <div className="pt-2 border-t space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Bottles</span>
+                <Button variant="ghost" size="xs" disabled={bottlesLoading} onClick={fetchBottlesStatus}>
+                  <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
+                </Button>
+              </div>
 
-            {bottlesAvailable && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">{t("maintenance.bottles")}</div>
-                  <Button variant="ghost" size="sm" disabled={bottlesLoading} onClick={fetchBottlesStatus}>
-                    {t("common.refresh")}
-                  </Button>
+              {!bottlesInstalled ? (
+                <div className="rounded border px-2 py-2 text-xs text-muted-foreground">
+                  <div>{t("maintenance.bottlesNotInstalled")}</div>
+                  <code className="block mt-1 bg-muted px-2 py-1 rounded text-[10px]">
+                    {bottlesInstallCommand}
+                  </code>
                 </div>
+              ) : (
+                <>
+                  <FormRow label={t("maintenance.enableBottles")}>
+                    <Switch
+                      checked={bottlesEnabled}
+                      disabled={bottlesLoading}
+                      onCheckedChange={(v: boolean) => updateBottlesEnabled(Boolean(v))}
+                    />
+                  </FormRow>
 
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div>
-                    <div className="text-sm font-medium">{t("maintenance.enableBottles")}</div>
-                    <div className="text-xs text-muted-foreground">{t("maintenance.enableBottlesDesc")}</div>
-                  </div>
-                  <Switch
-                    checked={bottlesEnabled}
-                    disabled={bottlesLoading || !bottlesInstalled}
-                    onCheckedChange={(v: boolean) => updateBottlesEnabled(Boolean(v))}
-                  />
-                </div>
-
-                {!bottlesInstalled && (
-                  <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
-                    <div className="mb-1">{t("maintenance.unavailable")}</div>
-                    <div>{t("maintenance.installHint")}</div>
-                    <div className="mt-2 rounded bg-muted px-2 py-1 font-mono">
-                      {bottlesInstallCommand}
-                    </div>
-                  </div>
-                )}
-
-                {bottlesInstalled && (
-                  <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">
-                      {t("maintenance.defaultBottle")}
-                    </div>
+                  <FormRow label={t("maintenance.defaultBottle")}>
                     <Select
                       value={defaultBottle}
                       onValueChange={updateDefaultBottle}
                       disabled={bottlesLoading || bottlesList.length === 0 || !bottlesEnabled}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger size="sm" className="w-[140px]">
                         <SelectValue placeholder={t("maintenance.selectBottle")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -233,14 +225,15 @@ export default function ManagementDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+                  </FormRow>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange?.(false)}>
             {t("common.close")}
           </Button>
         </DialogFooter>

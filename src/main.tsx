@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "@/App";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { AppLoader } from "@/components/common/AppLoader";
 import "@/assets/app.css";
 
 const container = document.getElementById("app");
@@ -9,4 +11,10 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(<App />);
+root.render(
+  <ErrorBoundary>
+    <AppLoader>
+      <App />
+    </AppLoader>
+  </ErrorBoundary>
+);

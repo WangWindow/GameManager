@@ -3,7 +3,6 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -15,12 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { getAppSettings, setContainerRoot, setNwjsKeepLatestOnly } from "@/lib/api";
 import { useI18n } from "@/i18n";
 import { useEffect, useState } from "react";
+import { Icon } from "@iconify/react";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -29,6 +27,22 @@ interface SettingsDialogProps {
   onOpenChange?: (open: boolean) => void;
   onThemeModeChange?: (mode: "system" | "light" | "dark") => void;
   onShowStatusBarChange?: (v: boolean) => void;
+}
+
+/** 简洁设置项 */
+function SettingRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between py-2">
+      <span className="text-sm">{label}</span>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
 }
 
 export default function SettingsDialog({
@@ -99,103 +113,84 @@ export default function SettingsDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("settings.title")}</DialogTitle>
-          <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-2">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div>
-                <div className="text-sm font-medium">{t("settings.language")}</div>
-                <div className="text-xs text-muted-foreground">{t("settings.languageDescription")}</div>
-              </div>
-              <Select value={locale} onValueChange={(v) => setLocale(v as "zh-CN" | "en-US")}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("settings.language")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zh-CN">{t("settings.language.zh-CN")}</SelectItem>
-                  <SelectItem value="en-US">{t("settings.language.en-US")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="divide-y">
+          {/* 外观 */}
+          <SettingRow label={t("settings.theme")}>
+            <Select
+              value={themeMode}
+              onValueChange={(v) => onThemeModeChange?.(v as "system" | "light" | "dark")}
+            >
+              <SelectTrigger className="w-24" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">{t("settings.theme.system")}</SelectItem>
+                <SelectItem value="light">{t("settings.theme.light")}</SelectItem>
+                <SelectItem value="dark">{t("settings.theme.dark")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
 
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div>
-                <div className="text-sm font-medium">{t("settings.theme")}</div>
-                <div className="text-xs text-muted-foreground">{t("settings.themeDescription")}</div>
-              </div>
-              <Select
-                value={themeMode}
-                onValueChange={(v) => onThemeModeChange?.(v as "system" | "light" | "dark")}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t("settings.theme")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="system">{t("settings.theme.system")}</SelectItem>
-                  <SelectItem value="light">{t("settings.theme.light")}</SelectItem>
-                  <SelectItem value="dark">{t("settings.theme.dark")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <SettingRow label={t("settings.language")}>
+            <Select value={locale} onValueChange={(v) => setLocale(v as "zh-CN" | "en-US")}>
+              <SelectTrigger className="w-24" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh-CN">中文</SelectItem>
+                <SelectItem value="en-US">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
 
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div>
-                <div className="text-sm font-medium">{t("settings.statusBar")}</div>
-                <div className="text-xs text-muted-foreground">{t("settings.statusBarDescription")}</div>
-              </div>
-              <Switch
-                checked={showStatusBar}
-                onCheckedChange={(v) => onShowStatusBarChange?.(Boolean(v))}
+          <SettingRow label={t("settings.statusBar")}>
+            <Switch
+              checked={showStatusBar}
+              onCheckedChange={(v) => onShowStatusBarChange?.(Boolean(v))}
+            />
+          </SettingRow>
+
+          <SettingRow label={t("settings.nwjsKeepLatest")}>
+            <Switch
+              checked={nwjsKeepLatestOnly}
+              onCheckedChange={(v) => updateNwjsKeepLatestOnly(Boolean(v))}
+            />
+          </SettingRow>
+
+          {/* 存储路径 */}
+          <div className="space-y-2 py-3">
+            <span className="text-sm">{t("settings.containerRoot")}</span>
+            <div className="flex gap-2">
+              <Input
+                value={containerRoot}
+                onChange={(e) => setContainerRootInput(e.target.value)}
+                placeholder={t("settings.containerRootPlaceholder")}
+                className="flex-1 h-8 text-sm"
               />
-            </div>
-
-            <div className="space-y-2 rounded-md border px-3 py-2">
-              <div>
-                <div className="text-sm font-medium">{t("settings.containerRoot")}</div>
-                <div className="text-xs text-muted-foreground">
-                  {t("settings.containerRootDescription")}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={containerRoot}
-                  onChange={(e) => setContainerRootInput(e.target.value)}
-                  placeholder={t("settings.containerRootPlaceholder")}
-                />
-                <Button variant="secondary" onClick={pickContainerRoot}>
-                  {t("common.browse")}
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" className="h-8 px-2" onClick={pickContainerRoot}>
+                <Icon icon="ri:folder-open-line" className="h-4 w-4" />
+              </Button>
               <Button
                 variant="secondary"
-                className="w-full"
+                size="sm"
+                className="h-8"
                 disabled={savingRoot || !containerRoot.trim()}
                 onClick={saveContainerRootSetting}
               >
-                {t("settings.saveContainerRoot")}
+                {savingRoot ? (
+                  <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin" />
+                ) : (
+                  t("common.save")
+                )}
               </Button>
             </div>
-
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div>
-                <div className="text-sm font-medium">{t("settings.nwjsKeepLatest")}</div>
-                <div className="text-xs text-muted-foreground">{t("settings.nwjsKeepLatestDescription")}</div>
-              </div>
-              <Switch
-                checked={nwjsKeepLatestOnly}
-                onCheckedChange={(v) => updateNwjsKeepLatestOnly(Boolean(v))}
-              />
-            </div>
-
-            <Separator />
-            <div className="text-xs text-muted-foreground">{t("settings.maintenanceHint")}</div>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange?.(false)}>
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange?.(false)}>
             {t("common.close")}
           </Button>
         </DialogFooter>

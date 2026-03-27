@@ -393,6 +393,7 @@ fn infer_game_type_from_engine(engine_type: &str) -> String {
         | EngineType::RpgMakerVXAce
         | EngineType::RpgMakerMV
         | EngineType::RpgMakerMZ => "rpg".to_string(),
+        EngineType::Unity | EngineType::Godot => "game".to_string(),
         EngineType::Other => "unknown".to_string(),
     }
 }

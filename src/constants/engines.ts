@@ -1,72 +1,92 @@
 /**
- * 引擎类型常量
+ * 引擎类型常量 - 简化版本
  */
 
 import { EngineType, ENGINE_DISPLAY_NAMES } from '@/types/engine'
 
-export const ENGINE_OPTION_RPGMAKER_NWJS = 'rpgmaker_nwjs'
+export const ENGINE_OPTION_NWJS = 'nwjs'
 
 /**
- * 所有支持的引擎类型
+ * 导入时可选的引擎类型 (简化为3种)
  */
-export const SUPPORTED_ENGINES = [
-  EngineType.RpgMakerVX,
-  EngineType.RpgMakerVXAce,
-  EngineType.RpgMakerMV,
-  EngineType.RpgMakerMZ,
-  EngineType.RenPy,
-  EngineType.Other,
-]
-
 export const ENGINE_PICKER_OPTIONS = [
-  { value: EngineType.RpgMakerVX, label: getEngineDisplayName(EngineType.RpgMakerVX) },
-  { value: EngineType.RpgMakerVXAce, label: getEngineDisplayName(EngineType.RpgMakerVXAce) },
-  { value: ENGINE_OPTION_RPGMAKER_NWJS, label: 'RPG Maker MV/MZ (NW.js)' },
-  { value: EngineType.RenPy, label: getEngineDisplayName(EngineType.RenPy) },
-  { value: EngineType.Other, label: getEngineDisplayName(EngineType.Other) },
+  { value: EngineType.RenPy, label: 'RenPy' },
+  { value: ENGINE_OPTION_NWJS, label: 'NW.js' },
+  { value: EngineType.Other, label: 'Other' },
 ]
 
+/**
+ * 筛选器选项
+ */
 export const ENGINE_FILTER_OPTIONS = [
-  { value: 'all', label: '全部引擎' },
-  ...ENGINE_PICKER_OPTIONS,
+  { value: 'all', label: '全部' },
+  { value: EngineType.RenPy, label: 'RenPy' },
+  { value: ENGINE_OPTION_NWJS, label: 'NW.js' },
+  { value: EngineType.Other, label: 'Other' },
 ]
 
-export function normalizeEngineTypeForSelect(engineType: string): string {
-  if (engineType === EngineType.RpgMakerMV || engineType === EngineType.RpgMakerMZ) {
-    return ENGINE_OPTION_RPGMAKER_NWJS
+/**
+ * 将选择的引擎类型转换为实际存储类型
+ */
+export function resolveSelectedEngineType(selected: string): string {
+  if (selected === ENGINE_OPTION_NWJS) {
+    return EngineType.RpgMakerMV
   }
-  return engineType
+  return selected
 }
 
-export function resolveSelectedEngineType(selected: string, previous?: string): string {
-  if (selected !== ENGINE_OPTION_RPGMAKER_NWJS) {
-    return selected
+/**
+ * 将存储的引擎类型转换为选择器显示类型
+ */
+export function normalizeEngineTypeForSelect(engineType: string): string {
+  // NW.js 类型游戏统一显示为 nwjs
+  if (
+    engineType === EngineType.RpgMakerMV ||
+    engineType === EngineType.RpgMakerMZ ||
+    engineType === EngineType.RpgMakerVX ||
+    engineType === EngineType.RpgMakerVXAce
+  ) {
+    return ENGINE_OPTION_NWJS
   }
-  if (previous === EngineType.RpgMakerMZ) {
-    return EngineType.RpgMakerMZ
+  // Unity/Godot 归类为其他
+  if (engineType === EngineType.Unity || engineType === EngineType.Godot) {
+    return EngineType.Other
   }
-  return EngineType.RpgMakerMV
+  return engineType
 }
 
 /**
  * 获取引擎显示名称
  */
 export function getEngineDisplayName(engineType: string): string {
-  if (engineType === EngineType.RpgMakerMV || engineType === EngineType.RpgMakerMZ) {
-    return 'RPG Maker MV/MZ (NW.js)'
+  // NW.js 类引擎
+  if (
+    engineType === EngineType.RpgMakerMV ||
+    engineType === EngineType.RpgMakerMZ ||
+    engineType === EngineType.RpgMakerVX ||
+    engineType === EngineType.RpgMakerVXAce ||
+    engineType === ENGINE_OPTION_NWJS
+  ) {
+    return 'NW.js'
   }
-  return ENGINE_DISPLAY_NAMES[engineType as EngineType] || engineType
+  if (engineType === EngineType.RenPy) return 'RenPy'
+  if (engineType === EngineType.Unity) return 'Unity'
+  if (engineType === EngineType.Godot) return 'Godot'
+  return ENGINE_DISPLAY_NAMES[engineType as EngineType] || 'Other'
 }
 
 /**
  * 引擎图标映射
  */
 export const ENGINE_ICONS: Record<string, string> = {
-  [EngineType.RpgMakerVX]: 'ri:gamepad-line',
-  [EngineType.RpgMakerVXAce]: 'ri:gamepad-line',
-  [EngineType.RpgMakerMV]: 'ri:gamepad-line',
-  [EngineType.RpgMakerMZ]: 'ri:gamepad-line',
-  [EngineType.RenPy]: 'ri:book-2-line',
+  [EngineType.RpgMakerVX]: 'ri:window-line',
+  [EngineType.RpgMakerVXAce]: 'ri:window-line',
+  [EngineType.RpgMakerMV]: 'ri:window-line',
+  [EngineType.RpgMakerMZ]: 'ri:window-line',
+  [ENGINE_OPTION_NWJS]: 'ri:window-line',
+  [EngineType.RenPy]: 'ri:slideshow-line',
+  [EngineType.Unity]: 'ri:gamepad-line',
+  [EngineType.Godot]: 'ri:gamepad-line',
   [EngineType.Other]: 'ri:question-line',
 }
 

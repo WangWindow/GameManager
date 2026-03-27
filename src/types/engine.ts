@@ -44,6 +44,8 @@ export enum EngineType {
   RpgMakerMV = 'rpgmakermv',
   RpgMakerMZ = 'rpgmakermz',
   RenPy = 'renpy',
+  Unity = 'unity',
+  Godot = 'godot',
   Other = 'other',
 }
 
@@ -56,5 +58,7 @@ export const ENGINE_DISPLAY_NAMES: Record<EngineType, string> = {
   [EngineType.RpgMakerMV]: 'RPG Maker MV (NW.js)',
   [EngineType.RpgMakerMZ]: 'RPG Maker MZ (NW.js)',
   [EngineType.RenPy]: 'RenPy',
+  [EngineType.Unity]: 'Unity',
+  [EngineType.Godot]: 'Godot',
   [EngineType.Other]: 'Other',
 }
