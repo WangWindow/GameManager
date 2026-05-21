@@ -15,6 +15,7 @@ export function useGameLibraryActions(options: Options) {
   const [importLoading, setImportLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [coverRefreshing, setCoverRefreshing] = useState(false);
 
   async function handleImportSubmit(payload: { executablePath: string; engineType: string }) {
     if (importLoading) return;
@@ -83,6 +84,8 @@ export function useGameLibraryActions(options: Options) {
   }
 
   async function handleRefreshCover(id: string) {
+    if (coverRefreshing) return;
+    setCoverRefreshing(true);
     try {
       await refreshGameCover(id);
       toast.success("图标已更新");
@@ -90,6 +93,8 @@ export function useGameLibraryActions(options: Options) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "图标更新失败";
       toast.error(msg);
+    } finally {
+      setCoverRefreshing(false);
     }
   }
 
@@ -97,6 +102,7 @@ export function useGameLibraryActions(options: Options) {
     importLoading,
     scanLoading,
     saveLoading,
+    coverRefreshing,
     handleImportSubmit,
     handleScanSubmit,
     handleGameSave,

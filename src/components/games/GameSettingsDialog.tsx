@@ -18,24 +18,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ENGINE_OPTION_NWJS,
-  ENGINE_PICKER_OPTIONS,
-  normalizeEngineTypeForSelect,
-  resolveSelectedEngineType,
-} from "@/constants/engines";
-import {
   getGameProfileDir,
   getGameSettings,
   getIntegrationStatus,
   openPath,
 } from "@/lib/api";
 import { useI18n } from "@/i18n";
+import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 import type { GameConfig, GameDto } from "@/types";
 
 interface GameSettingsDialogProps {
   open: boolean;
   game: GameDto | null;
   loading?: boolean;
+  coverRefreshing?: boolean;
   onOpenChange?: (open: boolean) => void;
   onSave?: (payload: {
     id: string;
@@ -58,31 +54,17 @@ function FormRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-interface GameSettingsDialogProps {
-  open: boolean;
-  game: GameDto | null;
-  loading?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  onSave?: (payload: {
-    id: string;
-    title: string;
-    engineType: string;
-    path: string;
-    runtimeVersion?: string;
-    settings: GameConfig;
-  }) => void;
-  onRefreshCover?: (id: string) => void;
-}
-
 export default function GameSettingsDialog({
   open,
   game,
   loading = false,
+  coverRefreshing = false,
   onOpenChange,
   onSave,
   onRefreshCover,
 }: GameSettingsDialogProps) {
   const { t } = useI18n();
+  const { engines, getCategory } = useEngineRegistry();
   const [title, setTitle] = useState("");
   const [engineType, setEngineType] = useState<string>("");
   const [path, setPath] = useState("");
@@ -103,8 +85,8 @@ export default function GameSettingsDialog({
   const [defaultBottle, setDefaultBottle] = useState("");
   const [bottleName, setBottleName] = useState("");
 
-  const isNwjs = useMemo(() => engineType === ENGINE_OPTION_NWJS, [engineType]);
-  const requiresEntryPath = useMemo(() => engineType === "other", [engineType]);
+  const isNwjs = useMemo(() => getCategory(engineType) === "nwjs", [engineType, getCategory]);
+  const requiresEntryPath = useMemo(() => getCategory(engineType) === "other", [engineType, getCategory]);
   const canSave = useMemo(() => {
     const basicValid = !!game && title.trim().length > 0 && path.trim().length > 0;
     const entryValid = !requiresEntryPath || entryPath.trim().length > 0;
@@ -127,7 +109,7 @@ export default function GameSettingsDialog({
   useEffect(() => {
     if (game) {
       setTitle(game.title);
-      setEngineType(normalizeEngineTypeForSelect(game.engineType));
+      setEngineType(game.engineType);
       setPath(game.path);
       setRuntimeVersion(game.runtimeVersion ?? "");
       // other values will be filled once settings load
@@ -141,7 +123,7 @@ export default function GameSettingsDialog({
     setSettingsLoading(true);
     getGameSettings(game.id)
       .then((config) => {
-        setEngineType(normalizeEngineTypeForSelect(config.engineType || game.engineType));
+        setEngineType(config.engineType || game.engineType);
         setEntryPath(
           config.entryPath ? toAbsoluteEntryPath(config.entryPath) : ""
         );
@@ -167,15 +149,16 @@ export default function GameSettingsDialog({
   }, [open, game, settingsLoaded]);
 
   // when engine type toggles to "other" while dialog is open, refresh bottles
+  const engineCategory = useMemo(() => getCategory(engineType), [engineType, getCategory]);
   useEffect(() => {
-    if (engineType === "other" && open) {
+    if (engineCategory === "other" && open && !bottlesLoading) {
       refreshBottlesStatus();
     }
-  }, [engineType, open]);
+  }, [engineCategory, open]);
 
   async function handleSave() {
     if (!game) return;
-    const resolvedEngineType = resolveSelectedEngineType(engineType);
+    const resolvedEngineType = engineType;
     const args = argsText
       .split(/\s+/)
       .map((s) => s.trim())
@@ -186,7 +169,7 @@ export default function GameSettingsDialog({
     );
 
     const usingBottles =
-      resolvedEngineType === "other" &&
+      getCategory(resolvedEngineType) === "other" &&
       bottlesAvailable &&
       bottlesEnabled &&
       bottlesInstalled;
@@ -214,7 +197,7 @@ export default function GameSettingsDialog({
 
   async function refreshBottlesStatus() {
     if (!game) return;
-    if (engineType !== "other") return;
+    if (getCategory(engineType) !== "other") return;
 
     setBottlesLoading(true);
     try {
@@ -336,10 +319,8 @@ export default function GameSettingsDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ENGINE_PICKER_OPTIONS.map((engine) => (
-                  <SelectItem key={engine.value} value={engine.value}>
-                    {engine.label}
-                  </SelectItem>
+                {engines.map(e => (
+                  <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -375,8 +356,12 @@ export default function GameSettingsDialog({
               <Button variant="outline" size="sm" className="h-8 px-2" onClick={pickCoverFile}>
                 <Icon icon="ri:folder-open-line" className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="outline" size="sm" className="h-8" onClick={handleRefreshCover}>
-                <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
+              <Button variant="outline" size="sm" className="h-8" disabled={coverRefreshing} onClick={handleRefreshCover}>
+                {coverRefreshing ? (
+                  <Icon icon="ri:loader-4-line" className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
+                )}
               </Button>
             </div>
           </FormRow>
@@ -408,7 +393,7 @@ export default function GameSettingsDialog({
               </div>
             </FormRow>
 
-            {engineType === "other" && bottlesAvailable && bottlesInstalled && (
+            {getCategory(engineType) === "other" && bottlesAvailable && bottlesInstalled && (
               <FormRow label={t("gameSettings.bottlesBottle")}>
                 <Select
                   value={bottleName}

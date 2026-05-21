@@ -1,17 +1,21 @@
 // 新版本lib.rs - 采用模块化架构
 //
 // 架构说明：
-// 1. models - 定义数据结构
+// 1. model - 定义数据结构
 // 2. services - 实现业务逻辑
 // 3. commands - 暴露Tauri命令
 // 4. utils - 工具函数
 
-mod commands;
-mod models;
-mod services;
+#![recursion_limit = "2048"]
 
-use services::db;
-use sqlx::SqlitePool;
+mod commands;
+mod db;
+mod engine;
+mod model;
+mod service;
+mod util;
+
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
@@ -29,18 +33,18 @@ fn init_logger(app: &tauri::AppHandle) -> Result<(), String> {
     let log_dir = app_data_dir.join("logs");
     let is_debug = cfg!(debug_assertions);
 
-    services::logger::init_logger(&log_dir, is_debug)
+    crate::service::logger::init_logger(&log_dir, is_debug)
 }
 
 /// 初始化数据库
-async fn init_database(app: &tauri::AppHandle) -> Result<SqlitePool, String> {
+async fn init_database(app: &tauri::AppHandle) -> Result<toasty::Db, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
 
     let db_path = app_data_dir.join("db").join("app.sqlite");
-    db::init_database(&db_path).await
+    crate::db::init_db(&db_path).await
 }
 
 /// 获取默认容器根目录
@@ -55,9 +59,9 @@ fn default_container_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// 解析容器根目录
 async fn resolve_container_root(
     app: &tauri::AppHandle,
-    pool: &SqlitePool,
+    db: &mut toasty::Db,
 ) -> Result<PathBuf, String> {
-    if let Some(value) = db::get_setting(pool, models::SETTING_CONTAINER_ROOT).await? {
+    if let Some(value) = crate::db::get_setting(db, model::SETTING_CONTAINER_ROOT).await? {
         return Ok(PathBuf::from(value));
     }
     Ok(default_container_root(app)?)
@@ -121,52 +125,88 @@ pub fn run() {
             let handle = app.handle().clone();
 
             // 初始化数据库
-            let pool = tauri::async_runtime::block_on(async move { init_database(&handle).await })
-                .expect("数据库初始化失败");
+            let db = Arc::new(Mutex::new(
+                tauri::async_runtime::block_on(async move { init_database(&handle).await })
+                    .expect("数据库初始化失败"),
+            ));
 
             tracing::info!("数据库初始化完成");
 
             // 解析容器根目录
+            let db2 = db.clone();
             let handle2 = app.handle().clone();
-            let pool2 = pool.clone();
             let container_root = tauri::async_runtime::block_on(async move {
-                resolve_container_root(&handle2, &pool2).await
+                let mut db_lock = db2.lock().await;
+                resolve_container_root(&handle2, &mut *db_lock).await
             })
             .unwrap_or_else(|_| default_container_root(app.handle()).unwrap());
 
             tracing::debug!(container_root = %container_root.display(), "容器根目录");
 
             // 迁移profile目录命名
-            let pool3 = pool.clone();
+            let db3 = db.clone();
             let migrate_root = container_root.clone();
             tauri::async_runtime::block_on(async move {
-                let service = services::GameService::new(pool3);
+                let service = crate::service::GameService::new(db3);
                 let _ = service.migrate_profile_keys(&migrate_root).await;
             });
 
             // 创建服务
-            let game_service = services::GameService::new(pool.clone());
-            let engine_service = services::EngineService::new(pool.clone());
-            let launcher_service = services::LauncherService::new();
+            let game_service = crate::service::GameService::new(db.clone());
+            let engine_service = crate::service::EngineService::new(db.clone());
+            let launcher_service = crate::service::LauncherService::new();
+
+            // 初始化引擎注册表
+            let engine_registry = {
+                let mut registry = crate::engine::EngineRegistry::new();
+                let engines_dir = app.path()
+                    .app_data_dir()
+                    .map(|p| p.join("engines"))
+                    .unwrap_or_else(|_| PathBuf::from("engines"));
+
+                // 首次运行时，复制内置 TOML 到 app_data/engines/
+                if !engines_dir.exists() {
+                    let _ = std::fs::create_dir_all(&engines_dir);
+                    let source_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("engines");
+                    if source_dir.exists() {
+                        for entry in std::fs::read_dir(&source_dir).into_iter().flatten() {
+                            if let Ok(entry) = entry {
+                                let path = entry.path();
+                                if path.extension().and_then(|e| e.to_str()) == Some("toml") {
+                                    if let Some(file_name) = path.file_name() {
+                                        let dest = engines_dir.join(file_name);
+                                        let _ = std::fs::copy(&path, &dest);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let _warnings = registry.load(&engines_dir, &HashMap::new());
+                Arc::new(Mutex::new(registry))
+            };
 
             // 管理状态
             app.manage(commands::game::AppState {
                 game_service: Arc::new(Mutex::new(game_service)),
-                engine_service: Arc::new(Mutex::new(services::EngineService::new(pool.clone()))),
+                engine_service: Arc::new(Mutex::new(crate::service::EngineService::new(db.clone()))),
                 launcher_service: Arc::new(Mutex::new(launcher_service)),
-                pool: pool.clone(),
+                db: db.clone(),
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
+                engine_registry,
+                config_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             });
 
             app.manage(commands::engine::EngineState {
                 engine_service: Arc::new(Mutex::new(engine_service)),
-                pool: pool.clone(),
+                db: db.clone(),
             });
 
             app.manage(commands::settings::SettingsState {
-                pool: pool.clone(),
-                game_service: Arc::new(Mutex::new(services::GameService::new(pool.clone()))),
-                engine_service: Arc::new(Mutex::new(services::EngineService::new(pool.clone()))),
+                db: db.clone(),
+                game_service: Arc::new(Mutex::new(crate::service::GameService::new(db.clone()))),
+                engine_service: Arc::new(Mutex::new(crate::service::EngineService::new(db.clone()))),
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
             });
 
@@ -199,6 +239,7 @@ pub fn run() {
             commands::delete_engine,
             commands::get_engine_update_info,
             commands::update_engine,
+            commands::get_engine_registry,
             // 设置相关命令
             commands::get_app_settings,
             commands::set_container_root,

@@ -1,13 +1,16 @@
-use crate::models::*;
-use crate::services::{EngineService, GameService, db, download::nwjs};
-use sqlx::SqlitePool;
+use crate::db::schema::Engine;
+use crate::model::{
+    AppSettings, CleanupResult, SetContainerRootInput,
+    SETTING_CONTAINER_ROOT, SETTING_NWJS_KEEP_LATEST_ONLY,
+};
+use crate::service::{EngineService, GameService, download::nwjs};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 /// 设置状态
 pub struct SettingsState {
-    pub pool: SqlitePool,
+    pub db: Arc<Mutex<toasty::Db>>,
     pub game_service: Arc<Mutex<GameService>>,
     pub engine_service: Arc<Mutex<EngineService>>,
     pub container_root: Arc<Mutex<String>>,
@@ -17,7 +20,8 @@ pub struct SettingsState {
 #[tauri::command]
 pub async fn get_app_settings(state: State<'_, SettingsState>) -> Result<AppSettings, String> {
     let container_root = state.container_root.lock().await;
-    let nwjs_keep_latest_only = db::get_setting(&state.pool, SETTING_NWJS_KEEP_LATEST_ONLY)
+    let mut db_lock = state.db.lock().await;
+    let nwjs_keep_latest_only = crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
         .await?
         .map(|v| v != "0")
         .unwrap_or(true);
@@ -36,11 +40,13 @@ pub async fn set_container_root(
     // 验证路径
     let path = std::path::Path::new(&input.container_root);
     if !path.exists() {
-        crate::services::path::ensure_dir(path)?;
+        crate::util::path::ensure_dir(path)?;
     }
 
     // 保存到数据库
-    db::set_setting(&state.pool, SETTING_CONTAINER_ROOT, &input.container_root).await?;
+    let mut db_lock = state.db.lock().await;
+    crate::db::set_setting(&mut *db_lock, SETTING_CONTAINER_ROOT, &input.container_root).await?;
+    drop(db_lock);
 
     // 更新状态
     let mut container_root = state.container_root.lock().await;
@@ -56,7 +62,8 @@ pub async fn set_nwjs_keep_latest_only(
     state: State<'_, SettingsState>,
 ) -> Result<(), String> {
     let value = if enabled { "1" } else { "0" };
-    db::set_setting(&state.pool, SETTING_NWJS_KEEP_LATEST_ONLY, value).await
+    let mut db_lock = state.db.lock().await;
+    crate::db::set_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY, value).await
 }
 
 /// 获取 NW.js 稳定版信息
@@ -110,7 +117,7 @@ pub async fn download_nwjs_stable(
         current_id = Some(added.id);
     }
 
-    if keep_latest_nwjs_enabled(&state.pool).await? {
+    if keep_latest_nwjs_enabled(&state.db).await? {
         prune_old_nwjs_engines(
             &engine_service,
             &app,
@@ -171,7 +178,7 @@ pub async fn cleanup_old_nwjs_versions(
             continue;
         }
 
-        remove_engine_path_if_owned(&app, &engine.path);
+        remove_engine_path_if_owned(&app, &engine.engine_path);
         engine_service.delete_engine(&engine.id).await?;
         deleted += 1;
     }
@@ -198,8 +205,9 @@ fn is_same_nwjs_flavor(engine: &Engine, flavor: nwjs::NwjsFlavor) -> bool {
     }
 }
 
-async fn keep_latest_nwjs_enabled(pool: &SqlitePool) -> Result<bool, String> {
-    Ok(db::get_setting(pool, SETTING_NWJS_KEEP_LATEST_ONLY)
+async fn keep_latest_nwjs_enabled(db: &Arc<Mutex<toasty::Db>>) -> Result<bool, String> {
+    let mut db_lock = db.lock().await;
+    Ok(crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
         .await?
         .map(|v| v != "0")
         .unwrap_or(true))
@@ -223,7 +231,7 @@ async fn prune_old_nwjs_engines(
         if keep_id == Some(engine.id.as_str()) {
             continue;
         }
-        remove_engine_path_if_owned(app, &engine.path);
+        remove_engine_path_if_owned(app, &engine.engine_path);
         engine_service.delete_engine(&engine.id).await?;
     }
 
@@ -232,8 +240,8 @@ async fn prune_old_nwjs_engines(
 
 fn remove_engine_path_if_owned(app: &AppHandle, path: &str) {
     if let Ok(app_data_dir) = app.path().app_data_dir() {
-        let engine_path = crate::services::path::canonicalize_path(std::path::Path::new(path));
-        if crate::services::path::is_within_dir(&engine_path, &app_data_dir) {
+        let engine_path = crate::util::path::canonicalize(std::path::Path::new(path));
+        if crate::util::path::is_within(&engine_path, &app_data_dir) {
             if engine_path.is_dir() {
                 let _ = std::fs::remove_dir_all(&engine_path);
                 if let Some(parent) = engine_path.parent() {

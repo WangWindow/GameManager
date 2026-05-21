@@ -1,0 +1,40 @@
+[meta]
+id = "rpgmakervx"
+name = "RPG Maker VX"
+category = "nwjs"
+icon = "ri:window-line"
+priority = 4
+
+[detection]
+min_score = 5
+
+[[detection.rules]]
+type = "file_exists"
+path = "Game.exe"
+weight = 2
+
+[[detection.rules]]
+type = "file_exists"
+path = "Game"
+weight = 2
+
+[[detection.rules]]
+type = "glob_match"
+pattern = "RGSS2*.dll"
+weight = 3
+
+[[detection.rules]]
+type = "glob_match"
+pattern = "RGSS1*.dll"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = "Game.ini"
+weight = 1
+
+[launch]
+strategy = "native"
+entry_patterns = ["Game.exe", "Game"]
+args = []
+sandbox_home = true

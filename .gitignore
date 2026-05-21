@@ -2,6 +2,8 @@
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,linux,database,macos,node,python,rust,windows
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,linux,database,macos,node,python,rust,windows
 
+.sisyphus
+
 ### Database ###
 *.accdb
 *.db

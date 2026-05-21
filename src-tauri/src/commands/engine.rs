@@ -1,6 +1,5 @@
-use crate::models::*;
-use crate::services::{EngineService, db, download::nwjs};
-use sqlx::SqlitePool;
+use crate::model::*;
+use crate::service::{EngineService, download::nwjs};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -8,7 +7,7 @@ use tokio::sync::Mutex;
 /// 引擎状态
 pub struct EngineState {
     pub engine_service: Arc<Mutex<EngineService>>,
-    pub pool: SqlitePool,
+    pub db: Arc<Mutex<toasty::Db>>,
 }
 
 /// 获取所有引擎
@@ -61,8 +60,8 @@ pub async fn delete_engine(
     if let Some(engine) = engine {
         if let Ok(app_data_dir) = app.path().app_data_dir() {
             let engine_path =
-                crate::services::path::canonicalize_path(std::path::Path::new(&engine.path));
-            if crate::services::path::is_within_dir(&engine_path, &app_data_dir) {
+                crate::util::path::canonicalize(std::path::Path::new(&engine.engine_path));
+            if crate::util::path::is_within(&engine_path, &app_data_dir) {
                 if engine_path.is_dir() {
                     let _ = std::fs::remove_dir_all(&engine_path);
                 } else if engine_path.is_file() {
@@ -151,8 +150,8 @@ pub async fn update_engine(
 
     if let Ok(app_data_dir) = app.path().app_data_dir() {
         let engine_path =
-            crate::services::path::canonicalize_path(std::path::Path::new(&engine.path));
-        if crate::services::path::is_within_dir(&engine_path, &app_data_dir) {
+            crate::util::path::canonicalize(std::path::Path::new(&engine.engine_path));
+        if crate::util::path::is_within(&engine_path, &app_data_dir) {
             if engine_path.is_dir() {
                 let _ = std::fs::remove_dir_all(&engine_path);
             } else if engine_path.is_file() {
@@ -165,7 +164,8 @@ pub async fn update_engine(
         .update_engine_install(&engine.id, info.version.clone(), result.install_dir.clone())
         .await?;
 
-    let keep_latest = db::get_setting(&state.pool, SETTING_NWJS_KEEP_LATEST_ONLY)
+    let mut db_lock = state.db.lock().await;
+    let keep_latest = crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
         .await?
         .map(|v| v != "0")
         .unwrap_or(true);
@@ -206,8 +206,8 @@ async fn prune_old_nwjs_engines(
 
         if let Ok(app_data_dir) = app.path().app_data_dir() {
             let engine_path =
-                crate::services::path::canonicalize_path(std::path::Path::new(&item.path));
-            if crate::services::path::is_within_dir(&engine_path, &app_data_dir) {
+                crate::util::path::canonicalize(std::path::Path::new(&item.engine_path));
+            if crate::util::path::is_within(&engine_path, &app_data_dir) {
                 if engine_path.is_dir() {
                     let _ = std::fs::remove_dir_all(&engine_path);
                     if let Some(parent) = engine_path.parent() {
@@ -223,6 +223,15 @@ async fn prune_old_nwjs_engines(
     }
 
     Ok(())
+}
+
+/// 获取引擎注册表（前端用引擎元数据列表）
+#[tauri::command]
+pub async fn get_engine_registry(
+    state: State<'_, crate::commands::game::AppState>,
+) -> Result<Vec<crate::engine::EngineMetaDto>, String> {
+    let registry = state.engine_registry.lock().await;
+    Ok(registry.list_for_frontend())
 }
 
 fn is_newer_version(current: &str, latest: &str) -> bool {

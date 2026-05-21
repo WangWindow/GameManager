@@ -1,0 +1,37 @@
+[meta]
+id = "unity"
+name = "Unity"
+category = "other"
+icon = "ri:gamepad-line"
+priority = 5
+
+[detection]
+min_score = 4
+
+[[detection.rules]]
+type = "file_exists"
+path = "UnityPlayer.dll"
+weight = 3
+
+[[detection.rules]]
+type = "glob_match"
+pattern = "*_Data"
+weight = 2
+
+[[detection.rules]]
+type = "dir_exists"
+path = "MonoBleedingEdge"
+weight = 1
+
+[[detection.rules]]
+type = "file_exists"
+path = "GameAssembly.dll"
+weight = 1
+
+[launch]
+strategy = "native"
+entry_patterns = ["Game.exe", "*.exe"]
+exclude_patterns = ["UnityCrashHandler*.exe", "UnityCrashHandler*"]
+args = []
+sandbox_home = false
+preserve_dirs = ["Save", "Saves"]

@@ -1,0 +1,50 @@
+[meta]
+id = "renpy"
+name = "Ren'Py"
+category = "renpy"
+icon = "ri:slideshow-line"
+priority = 0
+
+[detection]
+min_score = 4
+
+[[detection.rules]]
+type = "dir_exists"
+path = "renpy"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = "renpy.sh"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = "renpy.exe"
+weight = 3
+
+[[detection.rules]]
+type = "dir_exists"
+path = "game"
+weight = 1
+
+[[detection.rules]]
+type = "has_extension"
+ext = "rpy"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = "game/script.rpy"
+weight = 1
+
+[[detection.rules]]
+type = "glob_match"
+pattern = "lib/python*"
+weight = 1
+
+[launch]
+strategy = "native"
+entry_patterns = ["renpy.sh", "renpy.exe"]
+args = []
+sandbox_home = true

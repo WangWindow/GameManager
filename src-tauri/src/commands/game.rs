@@ -1,60 +1,149 @@
-use crate::models::*;
-use crate::services::{EngineService, FileService, GameService, LauncherService, db};
-use sqlx::SqlitePool;
-use std::collections::{HashSet, VecDeque};
+use crate::db::schema::Game;
+use crate::engine::EngineRegistry;
+use crate::model::{
+    AddGameInput, EngineType, GameConfig, GameDto,
+    ImportGameInput, LaunchResult, ScanGamesInput, ScanGamesResult, UpdateGameInput,
+    SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED,
+};
+use crate::service::{EngineService, FileService, GameService, LauncherService};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+type ConfigCache = Arc<StdMutex<HashMap<String, GameConfig>>>;
 
 /// 应用状态
 pub struct AppState {
     pub game_service: Arc<Mutex<GameService>>,
     pub engine_service: Arc<Mutex<EngineService>>,
     pub launcher_service: Arc<Mutex<LauncherService>>,
-    pub pool: SqlitePool,
+    pub db: Arc<Mutex<toasty::Db>>,
     pub container_root: Arc<Mutex<String>>,
+    pub engine_registry: Arc<Mutex<EngineRegistry>>,
+    pub config_cache: ConfigCache,
+}
+
+/// 带缓存的游戏配置读取。key = profile_key。
+/// 缓存生命周期与应用一致，游戏删除时清除对应条目避免泄漏。
+fn cached_read_config(
+    cache: &ConfigCache,
+    file_service: &FileService,
+    path: &Path,
+    profile_key: &str,
+) -> Option<GameConfig> {
+    let mut cache = cache.lock().unwrap();
+    if let Some(cfg) = cache.get(profile_key) {
+        return Some(cfg.clone());
+    }
+    if let Ok(cfg) = file_service.read_game_config(path) {
+        cache.insert(profile_key.to_string(), cfg.clone());
+        return Some(cfg);
+    }
+    None
+}
+
+fn cached_write_config(
+    cache: &ConfigCache,
+    file_service: &FileService,
+    path: &Path,
+    profile_key: &str,
+    config: &GameConfig,
+) -> Result<(), String> {
+    file_service.write_game_config(path, config)?;
+    cache.lock().unwrap().insert(profile_key.to_string(), config.clone());
+    Ok(())
+}
+
+fn cache_remove(cache: &ConfigCache, profile_key: &str) {
+    cache.lock().unwrap().remove(profile_key);
 }
 
 /// 获取所有游戏
 #[tauri::command]
 pub async fn get_games(state: State<'_, AppState>) -> Result<Vec<GameDto>, String> {
-    let service = state.game_service.lock().await;
-    let games = service.get_all_games().await?;
+    let games = {
+        let service = state.game_service.lock().await;
+        service.get_all_games().await?
+    };
     let container_root = state.container_root.lock().await;
-    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    let root = crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
-    let file_service = FileService::new();
-    let dtos = games
-        .into_iter()
-        .map(|g| {
-            let dto = service.to_dto(g.clone());
-            fill_cover_from_config(&file_service, &root, &g, dto)
-        })
-        .collect();
+
+    let cache = state.config_cache.clone();
+    let dtos = tokio::task::spawn_blocking(move || {
+        let file_service = FileService::new();
+        games
+            .into_iter()
+            .map(|g| {
+                let path_valid = std::path::Path::new(&g.game_path).exists();
+                let dto = GameDto {
+                    id: g.id.clone(),
+                    title: g.title.clone(),
+                    engine_type: g.engine_type.clone(),
+                    path: g.game_path.clone(),
+                    game_type: g.game_type.clone(),
+                    detection_confidence: g.detection_confidence,
+                    path_valid,
+                    runtime_version: g.runtime_version.clone(),
+                    cover_path: g.cover_path.clone(),
+                    play_count: g.play_count,
+                    created_at: g.created_at,
+                    last_played_at: g.last_played_at,
+                    updated_at: g.updated_at,
+                };
+                fill_cover_from_config(&cache, &file_service, &root, &g, dto)
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| format!("封面解析失败: {}", e))?;
+
     Ok(dtos)
 }
 
 /// 获取单个游戏
 #[tauri::command]
 pub async fn get_game(id: String, state: State<'_, AppState>) -> Result<Option<GameDto>, String> {
-    let service = state.game_service.lock().await;
-    let game = service.get_game_by_id(&id).await?;
-    if let Some(game) = game {
-        let container_root = state.container_root.lock().await;
-        let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
-        drop(container_root);
+    let game = {
+        let service = state.game_service.lock().await;
+        service.get_game_by_id(&id).await?
+    };
+    let Some(game) = game else {
+        return Ok(None);
+    };
+
+    let container_root = state.container_root.lock().await;
+    let root = crate::util::path::canonicalize(Path::new(container_root.as_str()));
+    drop(container_root);
+
+    let cache = state.config_cache.clone();
+    let dto = tokio::task::spawn_blocking(move || {
         let file_service = FileService::new();
-        let dto = service.to_dto(game.clone());
-        return Ok(Some(fill_cover_from_config(
-            &file_service,
-            &root,
-            &game,
-            dto,
-        )));
-    }
-    Ok(None)
+        let path_valid = std::path::Path::new(&game.game_path).exists();
+        let dto = GameDto {
+            id: game.id.clone(),
+            title: game.title.clone(),
+            engine_type: game.engine_type.clone(),
+            path: game.game_path.clone(),
+            game_type: game.game_type.clone(),
+            detection_confidence: game.detection_confidence,
+            path_valid,
+            runtime_version: game.runtime_version.clone(),
+            cover_path: game.cover_path.clone(),
+            play_count: game.play_count,
+            created_at: game.created_at,
+            last_played_at: game.last_played_at,
+            updated_at: game.updated_at,
+        };
+        fill_cover_from_config(&cache, &file_service, &root, &game, dto)
+    })
+    .await
+    .map_err(|e| format!("封面解析失败: {}", e))?;
+
+    Ok(Some(dto))
 }
 
 /// 添加游戏
@@ -81,7 +170,12 @@ pub async fn update_game(
 #[tauri::command]
 pub async fn delete_game(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let service = state.game_service.lock().await;
-    service.delete_game(&id).await
+    let game = service.get_game_by_id(&id).await?.ok_or_else(|| format!("游戏不存在: {}", id))?;
+    let profile_key = game.profile_key.clone();
+    service.delete_game(&id).await?;
+    drop(service);
+    cache_remove(&state.config_cache, &profile_key);
+    Ok(())
 }
 
 /// 启动游戏
@@ -94,7 +188,7 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         .ok_or_else(|| format!("游戏不存在: {}", id))?;
 
     // 记录启动日志
-    crate::services::logger::log_game_launch(&id, &game.title, &game.engine_type);
+    crate::service::logger::log_game_launch(&id, &game.title, &game.engine_type);
 
     // 更新最后游玩时间
     game_service.update_last_played(&id).await?;
@@ -103,13 +197,13 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
     // 获取容器根目录
     let container_root = state.container_root.lock().await;
     let container_path =
-        crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+        crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
     // 获取 NW.js 运行时（用于 MV/MZ）
-    let mut engine_type = game.get_engine_type();
+    let mut engine_type = EngineType::from_str(&game.engine_type);
     if engine_type == EngineType::Other && game.engine_type == "nwjs" {
-        if let Some(detected) = detect_engine_type(Path::new(&game.path)) {
+        if let Some(detected) = detect_engine_type(Path::new(&game.game_path)) {
             engine_type = EngineType::from_str(&detected);
         }
     }
@@ -121,7 +215,7 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         } else {
             engine_service.find_latest_engine_by_type("nwjs").await?
         };
-        engine.map(|e| PathBuf::from(e.path))
+        engine.map(|e| PathBuf::from(e.engine_path))
     } else {
         None
     };
@@ -141,7 +235,21 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
     };
 
     if let Some(cfg) = config.as_mut() {
-        let enabled = db::get_setting(&state.pool, SETTING_BOTTLES_ENABLED)
+        if cfg.entry_path.trim().is_empty() {
+            let registry = state.engine_registry.lock().await;
+            if let Some(entry) = registry.get_entry(&game.engine_type) {
+                let patterns = &entry.profile.launch.entry_patterns;
+                let excludes = &entry.profile.launch.exclude_patterns;
+                if let Some(exe) = crate::engine::find_executable(
+                    Path::new(&game.game_path), patterns, excludes,
+                ) {
+                    cfg.entry_path = normalize_path(&exe);
+                }
+            }
+        }
+
+        let mut db_lock = state.db.lock().await;
+        let enabled = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED)
             .await?
             .map(|v| v == "1")
             .unwrap_or(false);
@@ -149,7 +257,7 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
             cfg.use_bottles = false;
             cfg.bottle_name = None;
         } else if cfg.use_bottles && cfg.bottle_name.as_deref().unwrap_or("").is_empty() {
-            let default_bottle = db::get_setting(&state.pool, SETTING_BOTTLES_DEFAULT)
+            let default_bottle = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_DEFAULT)
                 .await?
                 .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
             if let Some(name) = default_bottle {
@@ -211,7 +319,7 @@ pub async fn import_game_dir(
     let game = service.add_game(input).await?;
 
     let container_root = state.container_root.lock().await;
-    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    let root = crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
     // 写入默认配置，记录入口文件
@@ -228,7 +336,6 @@ pub async fn import_game_dir(
     let entry_exe = Some(exe_path);
     update_game_cover(
         &service,
-        &file_service,
         &root,
         &game,
         &engine_type,
@@ -277,19 +384,19 @@ pub async fn scan_games(
     let scan_start = std::time::Instant::now();
 
     // 记录扫描开始
-    crate::services::logger::log_scan_start(&input.root, input.max_depth);
+    crate::service::logger::log_scan_start(&input.root, input.max_depth);
 
     let service = state.game_service.lock().await;
     let file_service = FileService::new();
 
     let container_root = state.container_root.lock().await;
-    let root_path = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    let root_path = crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
     let existing = service.get_all_games().await?;
     let mut existing_paths: HashSet<String> = existing
         .into_iter()
-        .map(|g| normalize_path(Path::new(&g.path)))
+        .map(|g| normalize_path(Path::new(&g.game_path)))
         .collect();
 
     let root = PathBuf::from(input.root);
@@ -297,7 +404,11 @@ pub async fn scan_games(
         return Err("扫描根目录不存在".to_string());
     }
 
-    let total_dirs = count_dirs(&root, input.max_depth);
+    let scan_root = root.clone();
+    let scan_max_depth = input.max_depth;
+    let total_dirs = tokio::task::spawn_blocking(move || count_dirs(&scan_root, scan_max_depth))
+        .await
+        .map_err(|e| format!("目录计数失败: {}", e))?;
     let mut scanned_dirs: u32 = 0;
     let mut found_games: u32 = 0;
     let mut imported: u32 = 0;
@@ -353,23 +464,32 @@ pub async fn scan_games(
                 let mut entry_exe: Option<PathBuf> = None;
                 if EngineType::from_str(&engine_type) == EngineType::RenPy {
                     entry_exe = find_renpy_launch_script(&dir);
-                    if let Some(entry) = entry_exe.as_deref() {
-                        let config_path =
-                            file_service.game_config_path(&root_path, &game.profile_key);
-                        if file_service
-                            .ensure_game_dirs(&root_path, &game.profile_key)
-                            .is_ok()
-                        {
-                            let mut config = default_game_config(&game);
-                            config.entry_path = normalize_path(entry);
-                            let _ = file_service.write_game_config(&config_path, &config);
-                        }
+                }
+
+                if entry_exe.is_none() {
+                    let registry = state.engine_registry.lock().await;
+                    if let Some(engine_entry) = registry.get_entry(&engine_type) {
+                        let patterns = &engine_entry.profile.launch.entry_patterns;
+                        let excludes = &engine_entry.profile.launch.exclude_patterns;
+                        entry_exe = crate::engine::find_executable(&dir, patterns, excludes);
+                    }
+                }
+
+                if let Some(entry) = entry_exe.as_deref() {
+                    let config_path =
+                        file_service.game_config_path(&root_path, &game.profile_key);
+                    if file_service
+                        .ensure_game_dirs(&root_path, &game.profile_key)
+                        .is_ok()
+                    {
+                        let mut config = default_game_config(&game);
+                        config.entry_path = normalize_path(entry);
+                        cached_write_config(&state.config_cache, &file_service, &config_path, &game.profile_key, &config);
                     }
                 }
 
                 update_game_cover(
                     &service,
-                    &file_service,
                     &root_path,
                     &game,
                     &engine_type,
@@ -414,7 +534,7 @@ pub async fn scan_games(
 
     // 记录扫描完成
     let duration_ms = scan_start.elapsed().as_millis() as u64;
-    crate::services::logger::log_scan_complete(imported as usize, skipped_existing as usize, duration_ms);
+    crate::service::logger::log_scan_complete(imported as usize, skipped_existing as usize, duration_ms);
 
     Ok(ScanGamesResult {
         scanned_dirs,
@@ -427,7 +547,6 @@ pub async fn scan_games(
 /// 按优先级更新封面图标
 async fn update_game_cover(
     service: &GameService,
-    file_service: &FileService,
     root: &Path,
     game: &Game,
     engine_type: &str,
@@ -435,8 +554,11 @@ async fn update_game_cover(
     entry_exe: Option<&Path>,
     force_extract: bool,
 ) -> bool {
+    let file_service = FileService::new();
+
+    // 快速同步检查：已有封面是否依然有效（仅做路径存在性检查）
     if !force_extract
-        && let Some(existing) = resolve_existing_cover(file_service, root, game)
+        && let Some(existing) = resolve_existing_cover(&file_service, root, game)
     {
         let _ = service
             .update_cover_path(&game.id, Some(existing.to_string_lossy().to_string()))
@@ -444,14 +566,27 @@ async fn update_game_cover(
         return true;
     }
 
-    let saved = resolve_cover_for_game(
-        file_service,
-        root,
-        &game.profile_key,
-        engine_type,
-        game_dir,
-        entry_exe,
-    );
+    // 重量级同步操作：遍历目录/PE 提取 → 放到 spawn_blocking 避免阻塞 Tauri 命令线程
+    let root_buf = root.to_path_buf();
+    let profile_key = game.profile_key.clone();
+    let engine_type_str = engine_type.to_string();
+    let game_dir_buf = game_dir.to_path_buf();
+    let entry_exe_buf = entry_exe.map(|p| p.to_path_buf());
+
+    let saved = tokio::task::spawn_blocking(move || {
+        let fs = FileService::new();
+        resolve_cover_for_game(
+            &fs,
+            &root_buf,
+            &profile_key,
+            &engine_type_str,
+            &game_dir_buf,
+            entry_exe_buf.as_deref(),
+        )
+    })
+    .await
+    .unwrap_or(None);
+
     if let Some(saved) = saved {
         let _ = service
             .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
@@ -825,28 +960,22 @@ fn resolve_entry_path_for_cover(game_path: &Path, entry_path: &str) -> Option<Pa
 }
 
 fn fill_cover_from_config(
+    cache: &ConfigCache,
     file_service: &FileService,
     root: &Path,
     game: &Game,
     mut dto: GameDto,
 ) -> GameDto {
     if let Some(path) = dto.cover_path.as_deref() {
-        let exists = Path::new(path).exists();
-        if exists {
+        if Path::new(path).exists() {
             return dto;
         }
         dto.cover_path = None;
     }
 
     let config_path = file_service.game_config_path(root, &game.profile_key);
-    if !config_path.exists() {
-        return dto;
-    }
-
-    let config = match file_service.read_game_config(&config_path) {
-        Ok(config) => config,
-        Err(_) => return dto,
-    };
+    let config = cached_read_config(cache, file_service, &config_path, &game.profile_key);
+    let Some(config) = config else { return dto };
     let cover_file = config.cover_file.unwrap_or_default();
     if cover_file.trim().is_empty() {
         return dto;
@@ -872,20 +1001,21 @@ pub async fn get_game_settings(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<GameConfig, String> {
-    let service = state.game_service.lock().await;
-    let game = service
-        .get_game_by_id(&id)
-        .await?
-        .ok_or_else(|| format!("游戏不存在: {}", id))?;
+    let game = {
+        let service = state.game_service.lock().await;
+        service
+            .get_game_by_id(&id)
+            .await?
+            .ok_or_else(|| format!("游戏不存在: {}", id))?
+    };
 
     let container_root = state.container_root.lock().await;
-    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    let root = crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
     let file_service = FileService::new();
     let config_path = file_service.game_config_path(&root, &game.profile_key);
-    if config_path.exists() {
-        let mut config = file_service.read_game_config(&config_path)?;
+    if let Some(mut config) = cached_read_config(&state.config_cache, &file_service, &config_path, &game.profile_key) {
         if config.engine_type == "nwjs" {
             config.engine_type = normalize_engine_type(&game);
         }
@@ -902,14 +1032,16 @@ pub async fn save_game_settings(
     input: GameConfig,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let service = state.game_service.lock().await;
-    let game = service
-        .get_game_by_id(&id)
-        .await?
-        .ok_or_else(|| format!("游戏不存在: {}", id))?;
+    let game = {
+        let service = state.game_service.lock().await;
+        service
+            .get_game_by_id(&id)
+            .await?
+            .ok_or_else(|| format!("游戏不存在: {}", id))?
+    };
 
     let container_root = state.container_root.lock().await;
-    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    let root = crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
     let file_service = FileService::new();
@@ -934,21 +1066,22 @@ pub async fn save_game_settings(
             if in_profile.exists() {
                 in_profile
             } else {
-                PathBuf::from(&game.path).join(&cover_file)
+                PathBuf::from(&game.game_path).join(&cover_file)
             }
         };
         if cover_path.exists() {
             if let Ok(saved) =
                 file_service.save_cover_to_profile(&root, &game.profile_key, &cover_path)
             {
-                let _ = service
+                let svc = state.game_service.lock().await;
+                let _ = svc
                     .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
                     .await;
             }
         }
     }
 
-    file_service.write_game_config(&config_path, &config)
+    cached_write_config(&state.config_cache, &file_service, &config_path, &game.profile_key, &config)
 }
 
 /// 重新提取图标/封面
@@ -961,7 +1094,7 @@ pub async fn refresh_game_cover(id: String, state: State<'_, AppState>) -> Resul
         .ok_or_else(|| format!("游戏不存在: {}", id))?;
 
     let container_root = state.container_root.lock().await;
-    let root = crate::services::path::canonicalize_path(Path::new(container_root.as_str()));
+    let root = crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
     let file_service = FileService::new();
@@ -970,7 +1103,7 @@ pub async fn refresh_game_cover(id: String, state: State<'_, AppState>) -> Resul
         file_service
             .read_game_config(&config_path)
             .ok()
-            .and_then(|cfg| resolve_entry_path_for_cover(Path::new(&game.path), &cfg.entry_path))
+            .and_then(|cfg| resolve_entry_path_for_cover(Path::new(&game.game_path), &cfg.entry_path))
     } else {
         None
     };
@@ -978,11 +1111,10 @@ pub async fn refresh_game_cover(id: String, state: State<'_, AppState>) -> Resul
     let resolved_engine = normalize_engine_type(&game);
     let refreshed = update_game_cover(
         &service,
-        &file_service,
         &root,
         &game,
         &resolved_engine,
-        Path::new(&game.path),
+        Path::new(&game.game_path),
         entry_exe.as_deref(),
         true,
     )
@@ -1384,7 +1516,7 @@ fn has_renpy_lib(path: &Path) -> bool {
 fn default_game_config(game: &Game) -> GameConfig {
     GameConfig {
         engine_type: normalize_engine_type(game),
-        entry_path: game.path.clone(),
+        entry_path: String::new(),
         runtime_version: game.runtime_version.clone(),
         args: Vec::new(),
         sandbox_home: true,
@@ -1396,7 +1528,7 @@ fn default_game_config(game: &Game) -> GameConfig {
 
 fn normalize_engine_type(game: &Game) -> String {
     if game.engine_type == "nwjs" {
-        if let Some(detected) = detect_engine_type(Path::new(&game.path)) {
+        if let Some(detected) = detect_engine_type(Path::new(&game.game_path)) {
             return detected;
         }
     }
@@ -1418,7 +1550,7 @@ fn is_nwjs_runtime_dir(path: &Path) -> bool {
 }
 
 fn normalize_path(path: &Path) -> String {
-    crate::services::path::canonicalize_path(path)
+    crate::util::path::canonicalize(path)
         .to_string_lossy()
         .to_string()
 }

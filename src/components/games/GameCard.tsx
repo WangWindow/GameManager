@@ -3,20 +3,22 @@ import { Icon } from "@iconify/react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getEngineDisplayName, getEngineIcon } from "@/constants/engines";
+import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 import { useI18n } from "@/i18n";
 import { formatRelativeTime } from "@/lib/utils";
 import type { GameDto } from "@/types";
 
 interface GameCardProps {
   game: GameDto;
+  isLaunching?: boolean;
   onLaunch?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }
 
-export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardProps) {
+export default function GameCard({ game, isLaunching = false, onLaunch, onEdit, onDelete }: GameCardProps) {
   const { t } = useI18n();
+  const { getName, getIcon } = useEngineRegistry();
   const coverSrc = useMemo(() => {
     if (!game.coverPath) return "";
     try {
@@ -39,7 +41,7 @@ export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardP
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-muted to-muted/50">
             <Icon
-              icon={getEngineIcon(game.engineType)}
+              icon={getIcon(game.engineType)}
               className="h-6 w-6 text-muted-foreground/40"
             />
           </div>
@@ -59,8 +61,8 @@ export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardP
           )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon icon={getEngineIcon(game.engineType)} className="h-3.5 w-3.5" />
-          <span className="truncate">{getEngineDisplayName(game.engineType)}</span>
+          <Icon icon={getIcon(game.engineType)} className="h-3.5 w-3.5" />
+          <span className="truncate">{getName(game.engineType)}</span>
           {game.lastPlayedAt && (
             <span className="truncate">· {formatRelativeTime(game.lastPlayedAt)}</span>
           )}
@@ -69,8 +71,18 @@ export default function GameCard({ game, onLaunch, onEdit, onDelete }: GameCardP
 
       {/* 操作按钮 */}
       <div className="flex shrink-0 items-center gap-2">
-        <Button size="icon" className="h-7 w-7" title={t("game.launch")} onClick={onLaunch}>
-          <Icon icon="ri:play-fill" className="h-3.5 w-3.5" />
+        <Button
+          size="icon"
+          className="h-7 w-7"
+          title={t("game.launch")}
+          disabled={isLaunching}
+          onClick={onLaunch}
+        >
+          {isLaunching ? (
+            <Icon icon="ri:loader-4-line" className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Icon icon="ri:play-fill" className="h-3.5 w-3.5" />
+          )}
         </Button>
         <Button
           variant="secondary"

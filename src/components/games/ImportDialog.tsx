@@ -16,12 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ENGINE_PICKER_OPTIONS,
-  resolveSelectedEngineType,
-} from "@/constants/engines";
 import { useI18n } from "@/i18n";
-import { EngineType } from "@/types/engine";
+import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 
 interface ImportDialogProps {
   open: boolean;
@@ -39,8 +35,9 @@ export default function ImportDialog({
   onSubmit,
 }: ImportDialogProps) {
   const { t } = useI18n();
+  const { engines } = useEngineRegistry();
   const [executablePath, setExecutablePath] = useState("");
-  const [engineType, setEngineType] = useState<string>(EngineType.Other);
+  const [engineType, setEngineType] = useState<string>("other");
 
   useEffect(() => {
     if (open && initialExecutablePath) {
@@ -48,7 +45,7 @@ export default function ImportDialog({
     }
     if (!open) {
       setExecutablePath("");
-      setEngineType(EngineType.Other);
+      setEngineType("other");
     }
   }, [open, initialExecutablePath]);
 
@@ -69,7 +66,7 @@ export default function ImportDialog({
     if (!executablePath) return;
     onSubmit?.({
       executablePath,
-      engineType: resolveSelectedEngineType(engineType),
+      engineType,
     });
   }
 
@@ -103,10 +100,8 @@ export default function ImportDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ENGINE_PICKER_OPTIONS.map((engine) => (
-                  <SelectItem key={engine.value} value={engine.value}>
-                    {engine.label}
-                  </SelectItem>
+                {engines.map(e => (
+                  <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -69,6 +69,7 @@ export function useGames() {
   const [games, setGames] = useState<GameDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
 
   const fetchGames = useCallback(async (force = false) => {
     if (!force) {
@@ -162,7 +163,8 @@ export function useGames() {
   }, []);
 
   const handleLaunchGame = useCallback(async (id: string): Promise<boolean> => {
-    setLoading(true);
+    if (launchingId) return false; // prevent double-click
+    setLaunchingId(id);
     setError(null);
     try {
       await launchGame(id);
@@ -175,9 +177,9 @@ export function useGames() {
       console.error("启动游戏失败:", e);
       return false;
     } finally {
-      setLoading(false);
+      setLaunchingId(null);
     }
-  }, [fetchGames]);
+  }, [fetchGames, launchingId]);
 
   const getGameById = useCallback(
     (id: string) => games.find((g) => g.id === id) ?? null,
@@ -188,6 +190,7 @@ export function useGames() {
     games,
     loading,
     error,
+    launchingId,
     fetchGames,
     handleAddGame,
     handleUpdateGame,

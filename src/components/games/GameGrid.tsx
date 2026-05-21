@@ -6,6 +6,7 @@ import type { GameDto } from "@/types";
 interface GameGridProps {
   games: GameDto[];
   loading?: boolean;
+  launchingId?: string | null;
   viewMode: "grid" | "list";
   onLaunch?: (id: string) => void;
   onEdit?: (id: string) => void;
@@ -15,6 +16,7 @@ interface GameGridProps {
 export default function GameGrid({
   games,
   loading = false,
+  launchingId = null,
   viewMode,
   onLaunch,
   onEdit,
@@ -53,6 +55,7 @@ export default function GameGrid({
           <GameCard
             key={game.id}
             game={game}
+            isLaunching={launchingId === game.id}
             onLaunch={() => onLaunch?.(game.id)}
             onEdit={() => onEdit?.(game.id)}
             onDelete={() => onDelete?.(game.id)}

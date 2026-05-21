@@ -33,10 +33,7 @@ import { useMaintenanceActions } from "@/hooks/useMaintenanceActions";
 import { useDialogState, useDeleteConfirmState } from "@/hooks/useDialogState";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { usePersistedState, usePersistedBoolean } from "@/hooks/usePersistedState";
-import {
-  ENGINE_FILTER_OPTIONS,
-  ENGINE_OPTION_NWJS,
-} from "@/constants/engines";
+import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 
 /** 游戏列表视图模式 */
 export type ViewMode = "grid" | "list";
@@ -58,6 +55,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = usePersistedState("gm_search_query", "");
   const [engineFilter, setEngineFilter] = usePersistedState("gm_engine_filter", "all");
 
+  const engineReg = useEngineRegistry();
+
   // 拖拽导入
   const { isDragging, droppedPath, clearDroppedPath } = useDragDrop();
 
@@ -70,7 +69,7 @@ export default function App() {
   }, [droppedPath, importDialog, clearDroppedPath]);
 
   // 游戏数据
-  const { games, loading, fetchGames, handleLaunchGame, handleDeleteGame } = useGames();
+  const { games, loading, launchingId, fetchGames, handleLaunchGame, handleDeleteGame } = useGames();
   const { themeMode, setThemeMode } = useThemeMode();
   const { currentTask, statusBarVisible: taskStatusVisible, updateTask } = useTaskStatus();
   useTauriEvents(updateTask);
@@ -79,6 +78,7 @@ export default function App() {
     importLoading,
     scanLoading,
     saveLoading,
+    coverRefreshing,
     handleImportSubmit,
     handleScanSubmit,
     handleGameSave,
@@ -99,6 +99,15 @@ export default function App() {
     handleRemoveEngine,
   } = useMaintenanceActions({ updateTask });
 
+  // 引擎筛选选项（动态，从后端注册表获取）
+  const filterOptions = useMemo(() => [
+    { value: "all", label: "全部" },
+    ...[...engineReg.categories.keys()].map(cat => ({
+      value: cat,
+      label: engineReg.categories.get(cat)?.[0]?.name ?? cat
+    }))
+  ], [engineReg.categories]);
+
   // 过滤后的游戏列表
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -109,12 +118,10 @@ export default function App() {
         game.engineType.toLowerCase().includes(query);
       const matchesType =
         engineFilter === "all" ||
-        (engineFilter === ENGINE_OPTION_NWJS
-          ? ["rpgmakermv", "rpgmakermz", "rpgmakervx", "rpgmakervxace"].includes(game.engineType)
-          : game.engineType === engineFilter);
+        engineReg.getIdsByCategory(engineFilter).includes(game.engineType);
       return matchesKeyword && matchesType;
     });
-  }, [games, searchQuery, engineFilter]);
+  }, [games, searchQuery, engineFilter, engineReg]);
 
   // 状态栏可见性
   const statusBarVisible = useMemo(
@@ -189,10 +196,7 @@ export default function App() {
                 count={filteredGames.length}
                 search={searchQuery}
                 selectedEngine={engineFilter}
-                engineOptions={ENGINE_FILTER_OPTIONS.map((item) => ({
-                  value: item.value,
-                  label: item.label,
-                }))}
+                engineOptions={filterOptions}
                 viewMode={viewMode}
                 onSearchChange={setSearchQuery}
                 onEngineChange={setEngineFilter}
@@ -202,6 +206,7 @@ export default function App() {
               <GameGrid
                 games={filteredGames}
                 loading={loading}
+                launchingId={launchingId}
                 viewMode={viewMode}
                 onLaunch={onLaunchGame}
                 onEdit={onEditGame}
@@ -230,6 +235,7 @@ export default function App() {
         open={gameSettingsDialog.isOpen}
         game={selectedGame}
         loading={saveLoading}
+        coverRefreshing={coverRefreshing}
         onOpenChange={gameSettingsDialog.setOpen}
         onSave={handleGameSave}
         onRefreshCover={handleRefreshCover}

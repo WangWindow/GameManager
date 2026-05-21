@@ -1,0 +1,36 @@
+[meta]
+id = "godot"
+name = "Godot"
+category = "other"
+icon = "ri:gamepad-line"
+priority = 6
+
+[detection]
+min_score = 4
+
+[[detection.rules]]
+type = "has_extension"
+ext = "pck"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = ".godot/global_script_class_cache.cfg"
+weight = 2
+
+[[detection.rules]]
+type = "file_exists"
+path = ".godot/extension_list.cfg"
+weight = 2
+
+[[detection.rules]]
+type = "file_exists"
+path = "project.godot"
+weight = 2
+
+[launch]
+strategy = "native"
+entry_patterns = ["Game.exe", "*.exe"]
+args = []
+sandbox_home = false
+preserve_dirs = ["user", "save"]

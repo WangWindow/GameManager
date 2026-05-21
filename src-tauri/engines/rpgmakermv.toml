@@ -1,0 +1,37 @@
+[meta]
+id = "rpgmakermv"
+name = "RPG Maker MV"
+category = "nwjs"
+icon = "ri:window-line"
+priority = 2
+
+[detection]
+min_score = 4
+
+[[detection.rules]]
+type = "file_exists"
+path = "js/rpg_core.js"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = "js/rpg_managers.js"
+weight = 3
+
+[[detection.rules]]
+type = "file_exists"
+path = "data/System.json"
+weight = 2
+
+[[detection.rules]]
+type = "file_exists"
+path = "package.json"
+weight = 1
+
+[launch]
+strategy = "nwjs"
+runtime_id = "nwjs-sdk"
+entry_patterns = ["nw.exe", "*.exe", "Game.exe", "Game"]
+args = ["--enable-webgl"]
+sandbox_home = true
+preserve_dirs = ["save", "www/save"]
