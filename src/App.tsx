@@ -181,7 +181,7 @@ export default function App() {
         onScan={scanDialog.open}
       />
 
-      <div className="flex flex-1 overflow-hidden pt-10">
+      <div className="flex flex-1 overflow-hidden">
         <main className="flex-1">
           <ScrollArea className="h-full">
             <div className="container mx-auto py-6">

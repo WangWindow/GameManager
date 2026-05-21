@@ -7,14 +7,19 @@
 @layer base {
 
   html,
-  body,
-  #app {
+  body {
     height: 100%;
+    background-color: transparent;
+    overflow: hidden;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  #app {
+    height: 100%;
+    @apply bg-background text-foreground border border-border;
+    border-radius: 12px;
+    overflow: hidden;
   }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -136,7 +141,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
   }
 }
 

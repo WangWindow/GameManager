@@ -24,7 +24,7 @@ export default function TitleBar({ onManage, onImport, onScan, onSettings }: Tit
   return (
     <header
       data-tauri-drag-region
-      className="fixed left-0 right-0 top-0 z-50 flex h-10 select-none items-center justify-between border-b bg-background/80 px-3 backdrop-blur supports-backdrop-filter:bg-background/60"
+      className="shrink-0 z-50 flex h-10 select-none items-center justify-between border-b bg-background/80 px-3 backdrop-blur supports-backdrop-filter:bg-background/60 rounded-t-lg"
     >
       <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">

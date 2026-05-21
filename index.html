@@ -23,14 +23,23 @@
       }
     }
 
-    html, body, #app {
-      height: 100%;
+    html,
+    body {
+      height: 100vh;
       margin: 0;
       padding: 0;
+      background-color: transparent !important;
+      overflow: hidden;
+    }
+
+    #app {
+      height: 100vh;
+      background-color: var(--loader-bg);
+      border-radius: 12px;
+      overflow: hidden;
     }
 
     body {
-      background-color: var(--loader-bg);
       font-family: system-ui, -apple-system, sans-serif;
     }
 
@@ -90,7 +99,9 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
