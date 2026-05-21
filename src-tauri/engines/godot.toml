@@ -31,6 +31,7 @@ weight = 2
 [launch]
 strategy = "native"
 entry_patterns = ["Game.exe", "*.exe"]
+exclude_patterns = ["crashpad_handler.exe", "crashpad_handler*"]
 args = []
 sandbox_home = false
 preserve_dirs = ["user", "save"]

@@ -164,19 +164,17 @@ pub fn run() {
                     .map(|p| p.join("engines"))
                     .unwrap_or_else(|_| PathBuf::from("engines"));
 
-                // 首次运行时，复制内置 TOML 到 app_data/engines/
-                if !engines_dir.exists() {
-                    let _ = std::fs::create_dir_all(&engines_dir);
-                    let source_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("engines");
-                    if source_dir.exists() {
-                        for entry in std::fs::read_dir(&source_dir).into_iter().flatten() {
-                            if let Ok(entry) = entry {
-                                let path = entry.path();
-                                if path.extension().and_then(|e| e.to_str()) == Some("toml") {
-                                    if let Some(file_name) = path.file_name() {
-                                        let dest = engines_dir.join(file_name);
-                                        let _ = std::fs::copy(&path, &dest);
-                                    }
+                // 每次启动同步内置 TOML，保证字段更新（不删用户自定义文件）
+                let _ = std::fs::create_dir_all(&engines_dir);
+                let source_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("engines");
+                if source_dir.exists() {
+                    for entry in std::fs::read_dir(&source_dir).into_iter().flatten() {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            if path.extension().and_then(|e| e.to_str()) == Some("toml") {
+                                if let Some(file_name) = path.file_name() {
+                                    let dest = engines_dir.join(file_name);
+                                    let _ = std::fs::copy(&path, &dest);
                                 }
                             }
                         }
@@ -240,6 +238,9 @@ pub fn run() {
             commands::get_engine_update_info,
             commands::update_engine,
             commands::get_engine_registry,
+            commands::get_engine_registry_detail,
+            commands::set_engine_enabled,
+            commands::get_engine_profile_detail,
             // 设置相关命令
             commands::get_app_settings,
             commands::set_container_root,

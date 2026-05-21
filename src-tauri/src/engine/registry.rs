@@ -4,7 +4,8 @@ use std::path::Path;
 use super::context::DetectionContext;
 use super::detection::{build_rule, score_game, DetectionRule};
 use super::launch::{build_strategy, LaunchStrategy};
-use super::profile::{EngineMetaDto, EngineProfile};
+use super::profile::{EngineDetailDto, EngineMetaDto, EngineProfile, EngineProfileDetailDto,
+    DetectionDetail, RuleDetail, LaunchDetail};
 
 pub struct EngineEntry {
     pub profile: EngineProfile,
@@ -197,9 +198,66 @@ impl EngineRegistry {
         dtos
     }
 
+    /// 插件管理面板用的完整列表（含启用/校验状态）。
+    pub fn list_detail_for_frontend(&self) -> Vec<EngineDetailDto> {
+        let mut dtos: Vec<EngineDetailDto> = self
+            .entries
+            .values()
+            .map(|e| EngineDetailDto {
+                id: e.profile.meta.id.clone(),
+                name: e.profile.meta.name.clone(),
+                category: e.profile.meta.category.clone(),
+                icon: e.profile.meta.icon.clone(),
+                description: e.profile.meta.description.clone(),
+                enabled: e.enabled,
+                valid: e.valid,
+                rule_count: e.rules.len(),
+                strategy: e.profile.launch.strategy.clone(),
+                errors: e.errors.clone(),
+            })
+            .collect();
+        dtos.sort_by_key(|d| d.id.clone());
+        dtos
+    }
+
     /// 获取某个引擎的详细信息（含校验状态）。
     pub fn get_entry(&self, id: &str) -> Option<&EngineEntry> {
         self.entries.get(id)
+    }
+
+    /// 获取插件完整配置详情。
+    pub fn get_profile_detail(&self, id: &str) -> Option<EngineProfileDetailDto> {
+        let entry = self.entries.get(id)?;
+        let p = &entry.profile;
+        Some(EngineProfileDetailDto {
+            id: p.meta.id.clone(),
+            name: p.meta.name.clone(),
+            category: p.meta.category.clone(),
+            icon: p.meta.icon.clone(),
+            description: p.meta.description.clone(),
+            enabled: entry.enabled,
+            valid: entry.valid,
+            detection: DetectionDetail {
+                min_score: p.detection.min_score,
+                rules: p.detection.rules.iter().map(|r| RuleDetail {
+                    rule_type: r.rule_type.clone(),
+                    path: r.path.clone(),
+                    pattern: r.pattern.clone(),
+                    ext: r.ext.clone(),
+                    weight: r.weight,
+                }).collect(),
+            },
+            launch: LaunchDetail {
+                strategy: p.launch.strategy.clone(),
+                entry_patterns: p.launch.entry_patterns.clone(),
+                exclude_patterns: p.launch.exclude_patterns.clone(),
+                args: p.launch.args.clone(),
+                sandbox_home: p.launch.sandbox_home,
+                runtime_id: p.launch.runtime_id.clone(),
+                program: p.launch.program.clone(),
+            },
+            errors: entry.errors.clone(),
+        })
     }
 
     /// 设置引擎启用/禁用状态（即时生效）。

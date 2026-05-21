@@ -15,6 +15,7 @@ export const zhCNMessages: MessageMap = {
   "common.delete": "删除",
   "common.choose": "选择",
   "titleBar.maintenance": "运行时与维护",
+  "titleBar.plugins": "引擎插件",
   "titleBar.minimize": "最小化",
   "titleBar.maximize": "最大化/还原",
   "titleBar.closeWindow": "关闭",

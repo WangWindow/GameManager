@@ -22,6 +22,8 @@ import type {
   Capabilities,
   IntegrationSettingsInput,
   IntegrationStatus,
+  EngineDetail,
+  EngineProfileDetail,
 } from '@/types'
 
 /**
@@ -258,4 +260,25 @@ export async function cleanupOldNwjsVersions(): Promise<CleanupResult> {
  */
 export async function cleanupUnusedContainers(): Promise<CleanupResult> {
   return invoke<CleanupResult>('cleanup_unused_containers')
+}
+
+/**
+ * 获取引擎注册表详情（插件管理用）
+ */
+export async function getEngineRegistryDetail(): Promise<EngineDetail[]> {
+  return invoke<EngineDetail[]>('get_engine_registry_detail')
+}
+
+/**
+ * 设置引擎启用/禁用
+ */
+export async function setEngineEnabled(id: string, enabled: boolean): Promise<void> {
+  return invoke('set_engine_enabled', { id, enabled })
+}
+
+/**
+ * 获取引擎完整配置详情
+ */
+export async function getEngineProfileDetail(id: string): Promise<EngineProfileDetail> {
+  return invoke<EngineProfileDetail>('get_engine_profile_detail', { id })
 }

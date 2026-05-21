@@ -5,5 +5,5 @@ pub mod profile;
 pub mod registry;
 
 pub use detection::find_executable;
-pub use profile::EngineMetaDto;
+pub use profile::{EngineMetaDto, EngineDetailDto, EngineProfileDetailDto};
 pub use registry::EngineRegistry;

@@ -15,6 +15,7 @@ export const enUSMessages: MessageMap = {
   "common.delete": "Delete",
   "common.choose": "Choose",
   "titleBar.maintenance": "Runtime & Maintenance",
+  "titleBar.plugins": "Engine Plugins",
   "titleBar.minimize": "Minimize",
   "titleBar.maximize": "Maximize / Restore",
   "titleBar.closeWindow": "Close",

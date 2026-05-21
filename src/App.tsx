@@ -18,6 +18,7 @@ import GameSettingsDialog from "@/components/games/GameSettingsDialog";
 import GameLibraryHeader from "@/components/games/GameLibraryHeader";
 import ManagementDialog from "@/components/settings/ManagementDialog";
 import SettingsDialog from "@/components/settings/SettingsDialog";
+import PluginsDialog from "@/components/settings/PluginsDialog";
 import ConfirmDeleteDialog from "@/components/common/ConfirmDeleteDialog";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,6 +43,7 @@ export default function App() {
   // ============ 对话框状态 ============
   const manageDialog = useDialogState();
   const settingsDialog = useDialogState();
+  const pluginsDialog = useDialogState();
   const importDialog = useDialogState<string>(); // data: 待导入的文件路径
   const scanDialog = useDialogState();
   const gameSettingsDialog = useDialogState<string>(); // data: 游戏 ID
@@ -184,6 +186,7 @@ export default function App() {
       <TitleBar
         onManage={manageDialog.open}
         onSettings={settingsDialog.open}
+        onPlugins={pluginsDialog.open}
         onImport={openImportDialog}
         onScan={scanDialog.open}
       />
@@ -249,6 +252,11 @@ export default function App() {
         onCleanupContainers={handleCleanupContainers}
         onUpdateEngine={handleUpdateEngine}
         onRemoveEngine={handleRemoveEngine}
+      />
+
+      <PluginsDialog
+        open={pluginsDialog.isOpen}
+        onOpenChange={pluginsDialog.setOpen}
       />
 
       <SettingsDialog

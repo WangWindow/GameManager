@@ -214,6 +214,67 @@ impl From<&EngineProfile> for EngineMetaDto {
     }
 }
 
+/// 插件管理面板用的完整信息
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineDetailDto {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub icon: String,
+    pub description: String,
+    pub enabled: bool,
+    pub valid: bool,
+    pub rule_count: usize,
+    pub strategy: String,
+    pub errors: Vec<String>,
+}
+
+/// 插件详情（查看完整配置用）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineProfileDetailDto {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub icon: String,
+    pub description: String,
+    pub enabled: bool,
+    pub valid: bool,
+    pub detection: DetectionDetail,
+    pub launch: LaunchDetail,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectionDetail {
+    pub min_score: i32,
+    pub rules: Vec<RuleDetail>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleDetail {
+    pub rule_type: String,
+    pub path: String,
+    pub pattern: String,
+    pub ext: String,
+    pub weight: i32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchDetail {
+    pub strategy: String,
+    pub entry_patterns: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub args: Vec<String>,
+    pub sandbox_home: bool,
+    pub runtime_id: String,
+    pub program: String,
+}
+
 // ─── 测试 ────────────────────────────────────────────────
 
 #[cfg(test)]

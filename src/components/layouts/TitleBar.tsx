@@ -15,9 +15,10 @@ interface TitleBarProps {
   onImport?: () => void;
   onScan?: () => void;
   onSettings?: () => void;
+  onPlugins?: () => void;
 }
 
-export default function TitleBar({ onManage, onImport, onScan, onSettings }: TitleBarProps) {
+export default function TitleBar({ onManage, onImport, onScan, onSettings, onPlugins }: TitleBarProps) {
   const { isTauri, isMaximized, minimize, toggleMaximize, close } = useWindowControls();
   const { t } = useI18n();
 
@@ -65,6 +66,7 @@ export default function TitleBar({ onManage, onImport, onScan, onSettings }: Tit
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={onManage}>{t("titleBar.maintenance")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onPlugins}>{t("titleBar.plugins")}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onSettings}>{t("common.settings")}</DropdownMenuItem>
           </DropdownMenuContent>
