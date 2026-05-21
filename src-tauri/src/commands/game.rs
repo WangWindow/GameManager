@@ -200,15 +200,17 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         crate::util::path::canonicalize(Path::new(container_root.as_str()));
     drop(container_root);
 
-    // 获取 NW.js 运行时（用于 MV/MZ）
+    // 获取 NW.js 运行时（MV/MZ 及所有 nwjs 策略的引擎，如 HTML）
     let mut engine_type = EngineType::from_str(&game.engine_type);
-    if engine_type == EngineType::Other && game.engine_type == "nwjs" {
-        if let Some(detected) = detect_engine_type(Path::new(&game.game_path)) {
-            engine_type = EngineType::from_str(&detected);
+    let needs_nwjs = {
+        let registry = state.engine_registry.lock().await;
+        if let Some(entry) = registry.get_entry(&game.engine_type) {
+            entry.profile.launch.strategy == "nwjs"
+        } else {
+            matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
         }
-    }
-    let nwjs_runtime_dir = if matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
-    {
+    };
+    let nwjs_runtime_dir = if needs_nwjs {
         let engine_service = state.engine_service.lock().await;
         let engine = if let Some(version) = game.runtime_version.as_deref() {
             engine_service.find_engine("nwjs", Some(version)).await?
@@ -220,9 +222,7 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         None
     };
 
-    if matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
-        && nwjs_runtime_dir.is_none()
-    {
+    if needs_nwjs && nwjs_runtime_dir.is_none() {
         return Err("未安装 NW.js 运行时，请先下载并安装".to_string());
     }
 

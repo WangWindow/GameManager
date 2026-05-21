@@ -46,23 +46,28 @@ impl LauncherService {
 
         // 根据引擎类型启动游戏
         let engine_type = EngineType::from_str(&game.engine_type);
-        let child = match engine_type {
-            EngineType::RpgMakerVX | EngineType::RpgMakerVXAce => {
-                self.launch_rpg_maker_game(game, game_path, container_root, &options)
-                    .await?
-            }
-            EngineType::RpgMakerMV | EngineType::RpgMakerMZ => {
-                self.launch_nwjs_game(game, game_path, container_root, nwjs_runtime_dir, &options)
-                    .await?
-            }
-            EngineType::RenPy => {
-                self.launch_renpy_game(game, game_path, container_root, &options)
-                    .await?
-            }
-            // Unity 和 Godot 游戏使用通用启动方式
-            EngineType::Unity | EngineType::Godot | EngineType::Other => {
-                self.launch_other_game(game, game_path, container_root, &options)
-                    .await?
+        let use_nwjs = nwjs_runtime_dir.is_some()
+            && (matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
+                || engine_type == EngineType::Other);
+
+        let child = if use_nwjs {
+            self.launch_nwjs_game(game, game_path, container_root, nwjs_runtime_dir, &options)
+                .await?
+        } else {
+            match engine_type {
+                EngineType::RpgMakerVX | EngineType::RpgMakerVXAce => {
+                    self.launch_rpg_maker_game(game, game_path, container_root, &options)
+                        .await?
+                }
+                EngineType::RenPy => {
+                    self.launch_renpy_game(game, game_path, container_root, &options)
+                        .await?
+                }
+                // Unity、Godot、Other 及未识别引擎使用通用启动
+                _ => {
+                    self.launch_other_game(game, game_path, container_root, &options)
+                        .await?
+                }
             }
         };
 
@@ -114,7 +119,22 @@ impl LauncherService {
         self.apply_args(&mut cmd, options);
 
         let app_path = self.resolve_nwjs_app_path(game_path, options.entry_path.as_deref());
-        cmd.arg(app_path);
+        let final_app_path = if app_path.extension().map(|e| e == "html" || e == "htm").unwrap_or(false) {
+            // 独立 HTML：在游戏目录放置 package.json（仅此最小文件），NW.js 以目录模式运行
+            let dir = app_path.parent().unwrap_or(game_path);
+            let pkg = dir.join("package.json");
+            if !pkg.exists() {
+                if let Some(name) = app_path.file_name() {
+                    let json = format!(r#"{{"main":"{}","name":"game"}}"#, name.to_string_lossy());
+                    let _ = std::fs::write(&pkg, json);
+                }
+            }
+            cmd.arg("--no-sandbox");
+            dir.to_path_buf()
+        } else {
+            app_path
+        };
+        cmd.arg(&final_app_path);
 
         let child = cmd
             .spawn()

@@ -19,5 +19,5 @@ weight = 1
 strategy = "nwjs"
 runtime_id = "nwjs-sdk"
 entry_patterns = ["index.html", "*.html"]
-args = ["--allow-file-access-from-files"]
+args = ["--allow-file-access-from-files", "--disable-gpu", "--no-sandbox"]
 sandbox_home = true
