@@ -35,7 +35,7 @@ export default function ImportDialog({
   onSubmit,
 }: ImportDialogProps) {
   const { t } = useI18n();
-  const { engines } = useEngineRegistry();
+  const { enabledEngines } = useEngineRegistry();
   const [executablePath, setExecutablePath] = useState("");
   const [engineType, setEngineType] = useState<string>("other");
 
@@ -100,7 +100,7 @@ export default function ImportDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {engines.map(e => (
+                {enabledEngines.map(e => (
                   <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                 ))}
               </SelectContent>

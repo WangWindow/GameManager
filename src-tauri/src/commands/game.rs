@@ -442,6 +442,13 @@ pub async fn scan_games(
         }
 
         if let Some(engine_type) = detect_engine_type(&dir) {
+            // 跳过标记为 skip_scan 的引擎（仅手动导入）
+            {
+                let registry = state.engine_registry.lock().await;
+                if registry.should_skip_scan(&engine_type) {
+                    continue;
+                }
+            }
             found_games += 1;
             let path_str = normalize_path(&dir);
             if existing_paths.contains(&path_str) {

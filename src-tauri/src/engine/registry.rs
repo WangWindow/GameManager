@@ -192,7 +192,11 @@ impl EngineRegistry {
         let mut dtos: Vec<EngineMetaDto> = self
             .entries
             .values()
-            .map(|e| EngineMetaDto::from(&e.profile))
+            .map(|e| {
+                let mut dto = EngineMetaDto::from(&e.profile);
+                dto.enabled = e.enabled;
+                dto
+            })
             .collect();
         dtos.sort_by_key(|d| d.priority);
         dtos
@@ -223,6 +227,13 @@ impl EngineRegistry {
     /// 获取某个引擎的详细信息（含校验状态）。
     pub fn get_entry(&self, id: &str) -> Option<&EngineEntry> {
         self.entries.get(id)
+    }
+
+    /// 检测时是否应跳过该引擎。
+    pub fn should_skip_scan(&self, id: &str) -> bool {
+        self.entries.get(id)
+            .map(|e| e.profile.meta.skip_scan)
+            .unwrap_or(false)
     }
 
     /// 获取插件完整配置详情。
@@ -290,6 +301,11 @@ impl EngineRegistry {
 
     pub fn enabled_count(&self) -> usize {
         self.entries.values().filter(|e| e.enabled && e.valid).count()
+    }
+
+    /// 返回所有引擎 ID 列表（用于持久化恢复）
+    pub fn engine_ids(&self) -> Vec<&String> {
+        self.entries.keys().collect()
     }
 }
 

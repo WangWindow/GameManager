@@ -164,7 +164,7 @@ pub fn run() {
                     .map(|p| p.join("engines"))
                     .unwrap_or_else(|_| PathBuf::from("engines"));
 
-                // 每次启动同步内置 TOML，保证字段更新（不删用户自定义文件）
+                // 每次启动同步内置 TOML
                 let _ = std::fs::create_dir_all(&engines_dir);
                 let source_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("engines");
                 if source_dir.exists() {
@@ -173,8 +173,7 @@ pub fn run() {
                             let path = entry.path();
                             if path.extension().and_then(|e| e.to_str()) == Some("toml") {
                                 if let Some(file_name) = path.file_name() {
-                                    let dest = engines_dir.join(file_name);
-                                    let _ = std::fs::copy(&path, &dest);
+                                    let _ = std::fs::copy(&path, &engines_dir.join(file_name));
                                 }
                             }
                         }
@@ -182,6 +181,21 @@ pub fn run() {
                 }
 
                 let _warnings = registry.load(&engines_dir, &HashMap::new());
+
+                // 恢复持久化的启用/禁用状态
+                let db_clone = db.clone();
+                let registry = tauri::async_runtime::block_on(async move {
+                    let mut db_lock = db_clone.lock().await;
+                    let ids: Vec<String> = registry.engine_ids().iter().map(|s| s.to_string()).collect();
+                    for id in &ids {
+                        let key = format!("engine.{}.enabled", id);
+                        if let Ok(Some(val)) = crate::db::get_setting(&mut db_lock, &key).await {
+                            let _ = registry.set_enabled(id, val == "1");
+                        }
+                    }
+                    registry
+                });
+
                 Arc::new(Mutex::new(registry))
             };
 
@@ -246,6 +260,7 @@ pub fn run() {
             commands::set_container_root,
             commands::set_nwjs_keep_latest_only,
             commands::get_platform,
+            commands::get_system_theme,
             commands::get_capabilities,
             commands::get_integration_status,
             commands::set_integration_settings,

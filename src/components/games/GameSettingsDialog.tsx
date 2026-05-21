@@ -64,7 +64,7 @@ export default function GameSettingsDialog({
   onRefreshCover,
 }: GameSettingsDialogProps) {
   const { t } = useI18n();
-  const { engines, getCategory } = useEngineRegistry();
+  const { enabledEngines, getCategory } = useEngineRegistry();
   const [title, setTitle] = useState("");
   const [engineType, setEngineType] = useState<string>("");
   const [path, setPath] = useState("");
@@ -319,7 +319,7 @@ export default function GameSettingsDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {engines.map(e => (
+                {enabledEngines.map(e => (
                   <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                 ))}
               </SelectContent>

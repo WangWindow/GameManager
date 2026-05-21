@@ -244,15 +244,21 @@ pub async fn get_engine_registry_detail(
     Ok(registry.list_detail_for_frontend())
 }
 
-/// 设置引擎启用/禁用
+/// 设置引擎启用/禁用（持久化到设置表）
 #[tauri::command]
 pub async fn set_engine_enabled(
     id: String,
     enabled: bool,
     state: State<'_, crate::commands::game::AppState>,
 ) -> Result<(), String> {
-    let mut registry = state.engine_registry.lock().await;
-    registry.set_enabled(&id, enabled)
+    {
+        let mut registry = state.engine_registry.lock().await;
+        registry.set_enabled(&id, enabled)?;
+    }
+    let setting_key = format!("engine.{}.enabled", id);
+    let value = if enabled { "1" } else { "0" };
+    let mut db = state.db.lock().await;
+    crate::db::set_setting(&mut db, &setting_key, value).await
 }
 
 /// 获取引擎完整配置详情

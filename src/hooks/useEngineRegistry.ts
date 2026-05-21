@@ -4,6 +4,8 @@ import type { EngineProfile } from "@/types/engine"
 
 interface EngineRegistry {
   engines: EngineProfile[]
+  /** 仅已启用的引擎（导入选择器用） */
+  enabledEngines: EngineProfile[]
   /** 按 category 分组的引擎列表 */
   categories: Map<string, EngineProfile[]>
   /** 按 ID 查找引擎 */
@@ -55,6 +57,7 @@ export function useEngineRegistry(): EngineRegistry {
 
   return {
     engines,
+    enabledEngines: engines.filter((e) => e.enabled),
     categories,
     loading,
     getById: (id) => engineMap.get(id),

@@ -5,24 +5,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Game Manager</title>
+  <script>
+    // 加载前从后端获取系统主题，避免闪白/闪黑
+    (function () {
+      try {
+        var theme = localStorage.getItem('gm_theme');
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else if (theme === 'light' || !theme) {
+          // system 或无记录 — 先按浅色渲染，等 Rust 检测结果
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (_) { }
+    })();
+  </script>
   <style>
-    /* 内联加载样式 - 防止 JS 加载前白屏 */
-    :root {
-      --loader-bg: #0a0a0a;
-      --loader-text: #fafafa;
-      --loader-subtext: #a1a1aa;
-      --loader-accent: #3b82f6;
-    }
-
-    @media (prefers-color-scheme: light) {
-      :root {
-        --loader-bg: #fafafa;
-        --loader-text: #09090b;
-        --loader-subtext: #71717a;
-        --loader-accent: #2563eb;
-      }
-    }
-
     html,
     body {
       height: 100vh;
@@ -34,9 +30,13 @@
 
     #app {
       height: 100vh;
-      background-color: var(--loader-bg);
+      background-color: oklch(1 0 0);
       border-radius: 12px;
       overflow: hidden;
+    }
+
+    :is(.dark) #app {
+      background-color: oklch(0.145 0 0);
     }
 
     body {
@@ -49,7 +49,6 @@
       justify-content: center;
       height: 100%;
       width: 100%;
-      background-color: var(--loader-bg);
     }
 
     .loader-content {
@@ -60,55 +59,41 @@
       width: 40px;
       height: 40px;
       margin: 0 auto 16px;
-      border: 3px solid var(--loader-subtext);
-      border-top-color: var(--loader-accent);
+      border: 3px solid oklch(0.9 0 0);
+      border-top-color: oklch(0.5 0 0);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
 
-    .loader-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
+    :is(.dark) .loader-spinner {
+      border-color: oklch(0.25 0 0);
+      border-top-color: oklch(0.7 0 0);
     }
 
     .loader-text {
-      color: var(--loader-text);
+      color: oklch(0.145 0 0);
       font-size: 18px;
       font-weight: 600;
       margin-bottom: 8px;
     }
 
+    :is(.dark) .loader-text {
+      color: oklch(0.985 0 0);
+    }
+
     .loader-subtext {
-      color: var(--loader-subtext);
+      color: oklch(0.556 0 0);
       font-size: 14px;
-    }
-
-    .loader-button {
-      margin-top: 16px;
-      padding: 8px 16px;
-      background-color: var(--loader-accent);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    .loader-button:hover {
-      opacity: 0.9;
     }
 
     @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
 
 <body>
   <div id="app">
-    <!-- 初始加载状态 - JS 加载后会被 React 替换 -->
     <div class="loader-container">
       <div class="loader-content">
         <div class="loader-spinner"></div>

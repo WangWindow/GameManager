@@ -6,6 +6,7 @@ export interface EngineProfile {
   icon: string
   priority: number
   description: string
+  enabled: boolean
 }
 
 /** 引擎运行时 DTO（已安装的 NW.js 等运行时） */

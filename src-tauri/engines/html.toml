@@ -1,0 +1,23 @@
+[meta]
+id = "html"
+name = "HTML"
+category = "nwjs"
+icon = "ri:html5-line"
+priority = 7
+description = "独立 HTML 游戏，使用 NW.js 运行时打开。仅支持手动导入，扫描时跳过。"
+skip_scan = true
+
+[detection]
+min_score = 1
+
+[[detection.rules]]
+type = "has_extension"
+ext = "html"
+weight = 1
+
+[launch]
+strategy = "nwjs"
+runtime_id = "nwjs-sdk"
+entry_patterns = ["index.html", "*.html"]
+args = ["--allow-file-access-from-files"]
+sandbox_home = true

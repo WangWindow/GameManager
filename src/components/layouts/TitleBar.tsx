@@ -92,7 +92,7 @@ export default function TitleBar({ onManage, onImport, onScan, onSettings, onPlu
             >
               <Icon
                 icon={
-                  isMaximized ? "ri:checkbox-multiple-blank-line" : "ri:checkbox-blank-line"
+                  isMaximized ? "ri:fullscreen-exit-line" : "ri:fullscreen-line"
                 }
                 className="h-4 w-4"
               />

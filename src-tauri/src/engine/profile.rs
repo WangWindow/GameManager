@@ -37,6 +37,9 @@ pub struct EngineMeta {
     /// 引擎描述（可选，用于 tooltip）
     #[serde(default)]
     pub description: String,
+    /// 扫描时跳过（仅支持手动导入）
+    #[serde(default)]
+    pub skip_scan: bool,
 }
 
 fn default_category() -> String {
@@ -199,6 +202,8 @@ pub struct EngineMetaDto {
     pub icon: String,
     pub priority: i32,
     pub description: String,
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 impl From<&EngineProfile> for EngineMetaDto {
@@ -210,6 +215,7 @@ impl From<&EngineProfile> for EngineMetaDto {
             icon: p.meta.icon.clone(),
             priority: p.meta.priority,
             description: p.meta.description.clone(),
+            enabled: true,
         }
     }
 }
@@ -470,6 +476,7 @@ sandbox_home = true
                 icon: "ri:test-line".into(),
                 priority: 0,
                 description: "A test engine".into(),
+                skip_scan: false,
             },
             detection: DetectionConfig {
                 min_score: 0,
