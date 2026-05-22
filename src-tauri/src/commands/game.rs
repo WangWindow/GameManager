@@ -249,21 +249,27 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         }
 
         let mut db_lock = state.db.lock().await;
-        let enabled = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED)
-            .await?
-            .map(|v| v == "1")
-            .unwrap_or(false);
-        if !enabled {
+        // 非 Windows .exe 不需要 Bottles（Linux 原生应用）
+        if !cfg.entry_path.to_lowercase().ends_with(".exe") {
             cfg.use_bottles = false;
             cfg.bottle_name = None;
-        } else if cfg.use_bottles && cfg.bottle_name.as_deref().unwrap_or("").is_empty() {
-            let default_bottle = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_DEFAULT)
+        } else {
+            let enabled = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED)
                 .await?
-                .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
-            if let Some(name) = default_bottle {
-                cfg.bottle_name = Some(name);
-            } else {
-                return Err("请选择 Bottles bottle".to_string());
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if !enabled {
+                cfg.use_bottles = false;
+                cfg.bottle_name = None;
+            } else if cfg.use_bottles && cfg.bottle_name.as_deref().unwrap_or("").is_empty() {
+                let default_bottle = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_DEFAULT)
+                    .await?
+                    .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
+                if let Some(name) = default_bottle {
+                    cfg.bottle_name = Some(name);
+                } else {
+                    return Err("请选择 Bottles bottle".to_string());
+                }
             }
         }
     }
@@ -330,6 +336,13 @@ pub async fn import_game_dir(
     }
     let mut config = default_game_config(&game);
     config.entry_path = executable_path.clone();
+    // 继承全局 Bottles 设置（仅 Windows .exe，Linux 原生不需要）
+    {
+        let mut db_lock = state.db.lock().await;
+        if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await {
+            config.use_bottles = val == "1" && executable_path.to_lowercase().ends_with(".exe");
+        }
+    }
     let _ = file_service.write_game_config(&config_path, &config);
 
     // 按优先级提取图标/封面
@@ -491,6 +504,13 @@ pub async fn scan_games(
                     {
                         let mut config = default_game_config(&game);
                         config.entry_path = normalize_path(entry);
+                        // 继承全局 Bottles 设置（仅 .exe）
+                        {
+                            let mut db_lock = state.db.lock().await;
+                            if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await {
+                                config.use_bottles = val == "1" && entry.to_string_lossy().to_lowercase().ends_with(".exe");
+                            }
+                        }
                         cached_write_config(&state.config_cache, &file_service, &config_path, &game.profile_key, &config);
                     }
                 }
@@ -1076,15 +1096,19 @@ pub async fn save_game_settings(
                 PathBuf::from(&game.game_path).join(&cover_file)
             }
         };
-        if cover_path.exists() {
-            if let Ok(saved) =
-                file_service.save_cover_to_profile(&root, &game.profile_key, &cover_path)
-            {
-                let svc = state.game_service.lock().await;
-                let _ = svc
-                    .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
-                    .await;
-            }
+            if cover_path.exists() {
+                if let Ok(saved) =
+                    file_service.save_cover_to_profile(&root, &game.profile_key, &cover_path)
+                {
+                    let svc = state.game_service.lock().await;
+                    let _ = svc
+                        .update_cover_path(&game.id, Some(saved.to_string_lossy().to_string()))
+                        .await;
+                    // 同步 cover_file 为实际保存的文件名
+                    if let Some(name) = saved.file_name().and_then(|n| n.to_str()) {
+                        config.cover_file = Some(name.to_string());
+                    }
+                }
         }
     }
 

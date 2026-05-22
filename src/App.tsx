@@ -101,12 +101,14 @@ export default function App() {
     handleRemoveEngine,
   } = useMaintenanceActions({ updateTask });
 
-  // 引擎筛选选项（动态，从后端注册表获取）
+  // 引擎筛选选项（按分类分组，标签显示分类名而非引擎名）
   const filterOptions = useMemo(() => [
     { value: "all", label: "全部" },
-    ...[...engineReg.categories.keys()].map(cat => ({
+    ...[...engineReg.categories.keys()].sort().map(cat => ({
       value: cat,
-      label: engineReg.categories.get(cat)?.[0]?.name ?? cat
+      label: cat === "nwjs" ? "NW.js" :
+             cat === "renpy" ? "Ren'Py" :
+             cat === "other" ? "其他" : cat,
     }))
   ], [engineReg.categories]);
 

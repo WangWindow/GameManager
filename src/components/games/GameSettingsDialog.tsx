@@ -84,6 +84,7 @@ export default function GameSettingsDialog({
   const [bottlesList, setBottlesList] = useState<string[]>([]);
   const [defaultBottle, setDefaultBottle] = useState("");
   const [bottleName, setBottleName] = useState("");
+  const [useBottles, setUseBottles] = useState(false);
 
   const isNwjs = useMemo(() => getCategory(engineType) === "nwjs", [engineType, getCategory]);
   const requiresEntryPath = useMemo(() => getCategory(engineType) === "other", [engineType, getCategory]);
@@ -124,14 +125,14 @@ export default function GameSettingsDialog({
     getGameSettings(game.id)
       .then((config) => {
         setEngineType(config.engineType || game.engineType);
-        setEntryPath(
-          config.entryPath ? toAbsoluteEntryPath(config.entryPath) : ""
-        );
+        const resolvedEntry = config.entryPath ? toAbsoluteEntryPath(config.entryPath) : "";
+        setEntryPath(resolvedEntry);
         setRuntimeVersion(config.runtimeVersion ?? game.runtimeVersion ?? "");
         setArgsText((config.args ?? []).join(" "));
         setSandboxHome(config.sandboxHome ?? true);
         setCoverFile(config.coverFile ?? "");
         setBottleName(config.bottleName ?? "");
+        setUseBottles(config.useBottles ?? resolvedEntry.toLowerCase().endsWith(".exe"));
         return refreshBottlesStatus();
       })
       .then(() => {
@@ -156,23 +157,18 @@ export default function GameSettingsDialog({
     }
   }, [engineCategory, open]);
 
+  // entryPath 变化时自动调整 Bottles 开关
+  useEffect(() => {
+    if (getCategory(engineType) === "other") {
+      setUseBottles(entryPath.toLowerCase().endsWith(".exe"));
+    }
+  }, [entryPath]);
+
   async function handleSave() {
     if (!game) return;
     const resolvedEngineType = engineType;
-    const args = argsText
-      .split(/\s+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const resolvedEntryPath = toAbsoluteEntryPath(
-      entryPath.trim() || path.trim()
-    );
-
-    const usingBottles =
-      getCategory(resolvedEngineType) === "other" &&
-      bottlesAvailable &&
-      bottlesEnabled &&
-      bottlesInstalled;
+    const args = argsText.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+    const resolvedEntryPath = toAbsoluteEntryPath(entryPath.trim() || path.trim());
 
     const settings: GameConfig = {
       engineType: resolvedEngineType,
@@ -180,8 +176,8 @@ export default function GameSettingsDialog({
       runtimeVersion: runtimeVersion.trim() || undefined,
       args,
       sandboxHome,
-      useBottles: usingBottles,
-      bottleName: usingBottles ? (bottleName.trim() || undefined) : undefined,
+      useBottles: useBottles && bottlesAvailable && bottlesInstalled,
+      bottleName: useBottles ? (bottleName.trim() || undefined) : undefined,
       coverFile: coverFile.trim() || undefined,
     };
 
@@ -394,12 +390,21 @@ export default function GameSettingsDialog({
             </FormRow>
 
             {getCategory(engineType) === "other" && bottlesAvailable && bottlesInstalled && (
-              <FormRow label={t("gameSettings.bottlesBottle")}>
-                <Select
-                  value={bottleName}
-                  onValueChange={(v) => setBottleName(v)}
-                  disabled={bottlesLoading || bottlesList.length === 0 || !bottlesEnabled}
-                >
+              <>
+                <FormRow label="使用 Bottles">
+                  <Switch
+                    checked={useBottles}
+                    onCheckedChange={(v) => setUseBottles(Boolean(v))}
+                    disabled={bottlesLoading || !bottlesEnabled}
+                  />
+                </FormRow>
+                {useBottles && (
+                  <FormRow label={t("gameSettings.bottlesBottle")}>
+                    <Select
+                      value={bottleName}
+                      onValueChange={(v) => setBottleName(v)}
+                      disabled={bottlesLoading || bottlesList.length === 0}
+                    >
                   <SelectTrigger size="sm">
                     <SelectValue placeholder={t("maintenance.selectBottle")} />
                   </SelectTrigger>
@@ -412,6 +417,8 @@ export default function GameSettingsDialog({
                   </SelectContent>
                 </Select>
               </FormRow>
+                )}
+              </>
             )}
 
             <FormRow label={t("gameSettings.args")}>
