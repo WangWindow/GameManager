@@ -204,6 +204,7 @@ pub struct EngineMetaDto {
     pub description: String,
     #[serde(default)]
     pub enabled: bool,
+    pub entry_patterns: Vec<String>,
 }
 
 impl From<&EngineProfile> for EngineMetaDto {
@@ -216,6 +217,7 @@ impl From<&EngineProfile> for EngineMetaDto {
             priority: p.meta.priority,
             description: p.meta.description.clone(),
             enabled: true,
+            entry_patterns: p.launch.entry_patterns.clone(),
         }
     }
 }

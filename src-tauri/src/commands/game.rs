@@ -236,14 +236,28 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
 
     if let Some(cfg) = config.as_mut() {
         if cfg.entry_path.trim().is_empty() {
-            let registry = state.engine_registry.lock().await;
-            if let Some(entry) = registry.get_entry(&game.engine_type) {
-                let patterns = &entry.profile.launch.entry_patterns;
-                let excludes = &entry.profile.launch.exclude_patterns;
-                if let Some(exe) = crate::engine::find_executable(
-                    Path::new(&game.game_path), patterns, excludes,
-                ) {
-                    cfg.entry_path = normalize_path(&exe);
+            let entry_patterns = {
+                let registry = state.engine_registry.lock().await;
+                registry.get_entry(&game.engine_type)
+                    .map(|e| e.profile.launch.entry_patterns.clone())
+                    .unwrap_or_default()
+            };
+            if entry_patterns.is_empty() {
+                if Path::new(&game.game_path).join("www").join("package.json").exists() {
+                    cfg.entry_path = "www".to_string();
+                } else {
+                    cfg.entry_path = "".to_string();
+                }
+            } else {
+                let registry = state.engine_registry.lock().await;
+                if let Some(entry) = registry.get_entry(&game.engine_type) {
+                    let patterns = &entry.profile.launch.entry_patterns;
+                    let excludes = &entry.profile.launch.exclude_patterns;
+                    if let Some(exe) = crate::engine::find_executable(
+                        Path::new(&game.game_path), patterns, excludes,
+                    ) {
+                        cfg.entry_path = normalize_path(&exe);
+                    }
                 }
             }
         }
@@ -335,7 +349,21 @@ pub async fn import_game_dir(
         return Err(e);
     }
     let mut config = default_game_config(&game);
-    config.entry_path = executable_path.clone();
+    let entry_patterns = {
+        let registry = state.engine_registry.lock().await;
+        registry.get_entry(&engine_type)
+            .map(|e| e.profile.launch.entry_patterns.clone())
+            .unwrap_or_default()
+    };
+    if entry_patterns.is_empty() {
+        if game_dir.join("www").join("package.json").exists() {
+            config.entry_path = "www".to_string();
+        } else {
+            config.entry_path = "".to_string();
+        }
+    } else {
+        config.entry_path = executable_path.clone();
+    }
     // 继承全局 Bottles 设置（仅 Windows .exe，Linux 原生不需要）
     {
         let mut db_lock = state.db.lock().await;
@@ -495,24 +523,37 @@ pub async fn scan_games(
                     }
                 }
 
-                if let Some(entry) = entry_exe.as_deref() {
-                    let config_path =
-                        file_service.game_config_path(&root_path, &game.profile_key);
-                    if file_service
-                        .ensure_game_dirs(&root_path, &game.profile_key)
-                        .is_ok()
-                    {
-                        let mut config = default_game_config(&game);
-                        config.entry_path = normalize_path(entry);
-                        // 继承全局 Bottles 设置（仅 .exe）
-                        {
-                            let mut db_lock = state.db.lock().await;
-                            if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await {
-                                config.use_bottles = val == "1" && entry.to_string_lossy().to_lowercase().ends_with(".exe");
-                            }
+                let config_path =
+                    file_service.game_config_path(&root_path, &game.profile_key);
+                if file_service
+                    .ensure_game_dirs(&root_path, &game.profile_key)
+                    .is_ok()
+                {
+                    let mut config = default_game_config(&game);
+                    let entry_patterns = {
+                        let registry = state.engine_registry.lock().await;
+                        registry.get_entry(&engine_type)
+                            .map(|e| e.profile.launch.entry_patterns.clone())
+                            .unwrap_or_default()
+                    };
+                    if entry_patterns.is_empty() {
+                        if dir.join("www").join("package.json").exists() {
+                            config.entry_path = "www".to_string();
+                        } else {
+                            config.entry_path = "".to_string();
                         }
-                        cached_write_config(&state.config_cache, &file_service, &config_path, &game.profile_key, &config);
+                    } else if let Some(entry) = entry_exe.as_deref() {
+                        config.entry_path = normalize_path(entry);
                     }
+
+                    // 继承全局 Bottles 设置（仅 .exe）
+                    if let Some(entry) = entry_exe.as_deref() {
+                        let mut db_lock = state.db.lock().await;
+                        if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await {
+                            config.use_bottles = val == "1" && entry.to_string_lossy().to_lowercase().ends_with(".exe");
+                        }
+                    }
+                    let _ = cached_write_config(&state.config_cache, &file_service, &config_path, &game.profile_key, &config);
                 }
 
                 update_game_cover(

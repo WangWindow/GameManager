@@ -267,7 +267,17 @@ impl FileService {
             .unwrap_or("png");
         let target = profile_dir.join(format!("cover.{ext}"));
 
-        std::fs::copy(source_path, &target).map_err(|e| format!("保存封面失败: {}", e))?;
+        let is_same = if source_path == target {
+            true
+        } else if let (Ok(p1), Ok(p2)) = (source_path.canonicalize(), target.canonicalize()) {
+            p1 == p2
+        } else {
+            false
+        };
+
+        if !is_same {
+            std::fs::copy(source_path, &target).map_err(|e| format!("保存封面失败: {}", e))?;
+        }
 
         Ok(target)
     }

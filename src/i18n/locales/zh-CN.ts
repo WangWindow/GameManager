@@ -69,6 +69,8 @@ export const zhCNMessages: MessageMap = {
   "gameSettings.loading": "加载设置中…",
   "gameSettings.entryPath": "入口文件/目录",
   "gameSettings.entryPathPlaceholder": "如：Game.exe / launcher.sh",
+  "gameSettings.pickFile": "选择文件",
+  "gameSettings.pickDirectory": "选择目录",
   "gameSettings.bottlesProgramHint": "Bottles 启用时可填写程序名称（如：Bandizip）",
   "gameSettings.bottlesBottle": "Bottles Bottle",
   "gameSettings.bottlesUnavailable": "该功能在你的系统上不可用。",

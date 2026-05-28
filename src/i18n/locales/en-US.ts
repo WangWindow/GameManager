@@ -69,6 +69,8 @@ export const enUSMessages: MessageMap = {
   "gameSettings.loading": "Loading settings...",
   "gameSettings.entryPath": "Entry File/Directory",
   "gameSettings.entryPathPlaceholder": "e.g. Game.exe / launcher.sh",
+  "gameSettings.pickFile": "Pick File",
+  "gameSettings.pickDirectory": "Pick Directory",
   "gameSettings.bottlesProgramHint": "When Bottles is enabled, you can enter a program name (e.g. Bandizip)",
   "gameSettings.bottlesBottle": "Bottles Bottle",
   "gameSettings.bottlesUnavailable": "This feature is unavailable on your system.",

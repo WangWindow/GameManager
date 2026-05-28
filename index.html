@@ -33,6 +33,11 @@
       background-color: oklch(1 0 0);
       border-radius: 12px;
       overflow: hidden;
+      transition: border-radius 0.2s ease;
+    }
+
+    body.maximized #app {
+      border-radius: 0;
     }
 
     :is(.dark) #app {

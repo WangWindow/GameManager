@@ -334,6 +334,23 @@ impl LauncherService {
 
     fn resolve_nwjs_app_path(&self, game_path: &Path, entry_path: Option<&str>) -> PathBuf {
         if let Some(path) = self.resolve_entry_path(game_path, entry_path) {
+            if path.is_file() {
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                if ext != "html" && ext != "htm" {
+                    if let Some(parent) = path.parent() {
+                        if parent.join("package.json").exists() {
+                            return parent.to_path_buf();
+                        }
+                    }
+                    if game_path.join("package.json").exists() {
+                        return game_path.to_path_buf();
+                    }
+                    let www = game_path.join("www");
+                    if www.join("package.json").exists() {
+                        return www;
+                    }
+                }
+            }
             return path;
         }
 

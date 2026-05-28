@@ -255,6 +255,24 @@ export default function GameSettingsDialog({
     }
   }
 
+  async function pickEntryDirectory() {
+    if (!game) return;
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const res = await open({
+        title: t("gameSettings.pickDirectory"),
+        directory: true,
+        multiple: false,
+      });
+      if (!res) return;
+      const selected = Array.isArray(res) ? res[0] ?? "" : res;
+      if (!selected) return;
+      setEntryPath(selected);
+    } catch (e) {
+      console.error("选择目录失败:", e);
+    }
+  }
+
   async function openGameDir() {
     if (!game) return;
     try {
@@ -383,8 +401,23 @@ export default function GameSettingsDialog({
                   placeholder={t("gameSettings.entryPathPlaceholder")}
                   onChange={(e) => setEntryPath(e.target.value)}
                 />
-                <Button variant="outline" size="sm" className="h-8 px-2" onClick={pickEntryFile}>
-                  <Icon icon="ri:folder-open-line" className="h-3.5 w-3.5" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={pickEntryFile}
+                  title={t("gameSettings.pickFile")}
+                >
+                  <Icon icon="ri:file-line" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={pickEntryDirectory}
+                  title={t("gameSettings.pickDirectory")}
+                >
+                  <Icon icon="ri:folder-line" className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </FormRow>

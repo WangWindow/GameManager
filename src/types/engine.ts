@@ -7,6 +7,7 @@ export interface EngineProfile {
   priority: number
   description: string
   enabled: boolean
+  entryPatterns?: string[]
 }
 
 /** 引擎运行时 DTO（已安装的 NW.js 等运行时） */

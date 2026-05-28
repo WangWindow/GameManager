@@ -31,7 +31,7 @@ weight = 1
 [launch]
 strategy = "nwjs"
 runtime_id = "nwjs-sdk"
-entry_patterns = ["nw.exe", "*.exe", "Game.exe", "Game"]
+entry_patterns = []
 args = ["--enable-webgl"]
 sandbox_home = true
 preserve_dirs = ["save", "www/save"]
