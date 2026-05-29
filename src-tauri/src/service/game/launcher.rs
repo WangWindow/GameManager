@@ -48,7 +48,7 @@ impl LauncherService {
         let engine_type = EngineType::from_str(&game.engine_type);
         let use_nwjs = nwjs_runtime_dir.is_some()
             && (matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
-                || engine_type == EngineType::Other);
+                || matches!(engine_type, EngineType::Html | EngineType::Other));
 
         let child = if use_nwjs {
             self.launch_nwjs_game(game, game_path, container_root, nwjs_runtime_dir, &options)

@@ -18,6 +18,8 @@ pub enum EngineType {
     Unity,
     /// Godot 游戏引擎
     Godot,
+    /// HTML 游戏
+    Html,
     /// 其他类型
     Other,
 }
@@ -33,6 +35,7 @@ impl EngineType {
             "renpy" => Self::RenPy,
             "unity" => Self::Unity,
             "godot" => Self::Godot,
+            "html" => Self::Html,
             _ => Self::Other,
         }
     }
@@ -47,6 +50,7 @@ impl EngineType {
             Self::RenPy => "renpy",
             Self::Unity => "unity",
             Self::Godot => "godot",
+            Self::Html => "html",
             Self::Other => "other",
         }
     }
@@ -170,5 +174,15 @@ impl Default for GameConfig {
             bottle_name: None,
             cover_file: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EngineType;
+
+    #[test]
+    fn engine_type_parses_html() {
+        assert_eq!(EngineType::from_str("html").as_str(), "html");
     }
 }

@@ -718,7 +718,7 @@ fn resolve_cover_for_game(
             }
         }
         // Unity、Godot、RenPy 和其他引擎使用相同的封面提取策略
-        EngineType::RenPy | EngineType::Unity | EngineType::Godot | EngineType::Other => {
+        EngineType::RenPy | EngineType::Unity | EngineType::Godot | EngineType::Html | EngineType::Other => {
             if let Some(exe) = exe_candidate.as_deref() {
                 if let Some(saved) = save_exe_icon(exe) {
                     return Some(saved);
@@ -850,7 +850,7 @@ fn find_executable_for_icon(engine: EngineType, game_dir: &Path) -> Option<PathB
         EngineType::RenPy => find_root_windows_exe(game_dir, &["renpy", "python"]),
         EngineType::Unity => find_unity_executable(game_dir),
         EngineType::Godot => find_godot_executable(game_dir),
-        EngineType::Other => find_root_windows_exe(game_dir, &[]),
+        EngineType::Html | EngineType::Other => find_root_windows_exe(game_dir, &[]),
     }
 }
 
