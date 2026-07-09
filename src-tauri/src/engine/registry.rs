@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::context::DetectionContext;
-use super::detection::{build_rule, score_game, DetectionRule};
-use super::launch::{build_strategy, LaunchStrategy};
-use super::profile::{EngineDetailDto, EngineMetaDto, EngineProfile, EngineProfileDetailDto,
-    DetectionDetail, RuleDetail, LaunchDetail};
+use super::detection::{DetectionRule, build_rule, score_game};
+use super::launch::{LaunchStrategy, build_strategy};
+use super::profile::{
+    DetectionDetail, EngineDetailDto, EngineMetaDto, EngineProfile, EngineProfileDetailDto,
+    LaunchDetail, RuleDetail,
+};
 
 pub struct EngineEntry {
     pub profile: EngineProfile,
@@ -31,17 +33,17 @@ impl EngineRegistry {
     ///
     /// `enabled_map` 来自持久化存储，决定每个引擎是否启用（key = engine id）。
     /// 加载失败的引擎记录错误但不阻塞其他引擎。
-    pub fn load(
-        &mut self,
-        config_dir: &Path,
-        enabled_map: &HashMap<String, bool>,
-    ) -> Vec<String> {
+    pub fn load(&mut self, config_dir: &Path, enabled_map: &HashMap<String, bool>) -> Vec<String> {
         let mut warnings: Vec<String> = Vec::new();
 
         let entries = match std::fs::read_dir(config_dir) {
             Ok(entries) => entries,
             Err(e) => {
-                warnings.push(format!("无法读取引擎配置目录 {}: {}", config_dir.display(), e));
+                warnings.push(format!(
+                    "无法读取引擎配置目录 {}: {}",
+                    config_dir.display(),
+                    e
+                ));
                 return warnings;
             }
         };
@@ -65,13 +67,8 @@ impl EngineRegistry {
         warnings
     }
 
-    fn load_one(
-        &mut self,
-        path: &Path,
-        enabled_map: &HashMap<String, bool>,
-    ) -> Result<(), String> {
-        let content =
-            std::fs::read_to_string(path).map_err(|e| format!("读取文件失败: {}", e))?;
+    fn load_one(&mut self, path: &Path, enabled_map: &HashMap<String, bool>) -> Result<(), String> {
+        let content = std::fs::read_to_string(path).map_err(|e| format!("读取文件失败: {}", e))?;
 
         let profile: EngineProfile =
             toml::from_str(&content).map_err(|e| format!("TOML 解析失败: {}", e))?;
@@ -149,10 +146,7 @@ impl EngineRegistry {
     ///
     /// 返回 `(engine_id, confidence)`，confidence 为 0-100。
     /// 只检查 `enabled && valid` 的引擎。
-    pub fn detect(
-        &self,
-        ctx: &dyn DetectionContext,
-    ) -> Option<(&str, i32)> {
+    pub fn detect(&self, ctx: &dyn DetectionContext) -> Option<(&str, i32)> {
         let mut best: Option<(&str, i32, i32)> = None; // (id, score, priority)
 
         for entry in self.entries.values() {
@@ -231,7 +225,8 @@ impl EngineRegistry {
 
     /// 检测时是否应跳过该引擎。
     pub fn should_skip_scan(&self, id: &str) -> bool {
-        self.entries.get(id)
+        self.entries
+            .get(id)
             .map(|e| e.profile.meta.skip_scan)
             .unwrap_or(false)
     }
@@ -250,13 +245,18 @@ impl EngineRegistry {
             valid: entry.valid,
             detection: DetectionDetail {
                 min_score: p.detection.min_score,
-                rules: p.detection.rules.iter().map(|r| RuleDetail {
-                    rule_type: r.rule_type.clone(),
-                    path: r.path.clone(),
-                    pattern: r.pattern.clone(),
-                    ext: r.ext.clone(),
-                    weight: r.weight,
-                }).collect(),
+                rules: p
+                    .detection
+                    .rules
+                    .iter()
+                    .map(|r| RuleDetail {
+                        rule_type: r.rule_type.clone(),
+                        path: r.path.clone(),
+                        pattern: r.pattern.clone(),
+                        ext: r.ext.clone(),
+                        weight: r.weight,
+                    })
+                    .collect(),
             },
             launch: LaunchDetail {
                 strategy: p.launch.strategy.clone(),
@@ -300,7 +300,10 @@ impl EngineRegistry {
     }
 
     pub fn enabled_count(&self) -> usize {
-        self.entries.values().filter(|e| e.enabled && e.valid).count()
+        self.entries
+            .values()
+            .filter(|e| e.enabled && e.valid)
+            .count()
     }
 
     /// 返回所有引擎 ID 列表（用于持久化恢复）
@@ -343,10 +346,12 @@ entry_patterns = ["game"]
 "#;
 
         let profile: EngineProfile = toml::from_str(toml_str).unwrap();
-        let rules: Vec<Box<dyn DetectionRule>> =
-            profile.detection.rules.iter()
-                .map(|d| build_rule(d).unwrap())
-                .collect();
+        let rules: Vec<Box<dyn DetectionRule>> = profile
+            .detection
+            .rules
+            .iter()
+            .map(|d| build_rule(d).unwrap())
+            .collect();
         let strategy = build_strategy("native").unwrap();
 
         registry.entries.insert(

@@ -8,8 +8,7 @@ pub fn canonicalize(path: &Path) -> PathBuf {
 
 /// 确保目录存在，不存在则递归创建。
 pub fn ensure_dir(path: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(path)
-        .map_err(|e| format!("创建目录失败 {}: {}", path.display(), e))
+    std::fs::create_dir_all(path).map_err(|e| format!("创建目录失败 {}: {}", path.display(), e))
 }
 
 /// 判断 `path` 是否在 `root` 目录内（均先规范化）。

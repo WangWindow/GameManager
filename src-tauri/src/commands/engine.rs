@@ -1,6 +1,5 @@
 use crate::model::*;
 use crate::service::{EngineService, download::nwjs};
-use crate::engine::EngineDetailDto;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -229,7 +228,7 @@ async fn prune_old_nwjs_engines(
 /// 获取引擎注册表（前端用引擎元数据列表）
 #[tauri::command]
 pub async fn get_engine_registry(
-    state: State<'_, crate::commands::game::AppState>,
+    state: State<'_, crate::commands::state::AppState>,
 ) -> Result<Vec<crate::engine::EngineMetaDto>, String> {
     let registry = state.engine_registry.lock().await;
     Ok(registry.list_for_frontend())
@@ -238,7 +237,7 @@ pub async fn get_engine_registry(
 /// 获取引擎注册表详情（插件管理面板用，含启用/校验状态）
 #[tauri::command]
 pub async fn get_engine_registry_detail(
-    state: State<'_, crate::commands::game::AppState>,
+    state: State<'_, crate::commands::state::AppState>,
 ) -> Result<Vec<crate::engine::EngineDetailDto>, String> {
     let registry = state.engine_registry.lock().await;
     Ok(registry.list_detail_for_frontend())
@@ -249,7 +248,7 @@ pub async fn get_engine_registry_detail(
 pub async fn set_engine_enabled(
     id: String,
     enabled: bool,
-    state: State<'_, crate::commands::game::AppState>,
+    state: State<'_, crate::commands::state::AppState>,
 ) -> Result<(), String> {
     {
         let mut registry = state.engine_registry.lock().await;
@@ -265,10 +264,11 @@ pub async fn set_engine_enabled(
 #[tauri::command]
 pub async fn get_engine_profile_detail(
     id: String,
-    state: State<'_, crate::commands::game::AppState>,
+    state: State<'_, crate::commands::state::AppState>,
 ) -> Result<crate::engine::EngineProfileDetailDto, String> {
     let registry = state.engine_registry.lock().await;
-    registry.get_profile_detail(&id)
+    registry
+        .get_profile_detail(&id)
         .ok_or_else(|| format!("引擎 '{}' 不存在", id))
 }
 

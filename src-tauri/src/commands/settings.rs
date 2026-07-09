@@ -1,7 +1,7 @@
 use crate::db::schema::Engine;
 use crate::model::{
-    AppSettings, CleanupResult, SetContainerRootInput,
-    SETTING_CONTAINER_ROOT, SETTING_NWJS_KEEP_LATEST_ONLY,
+    AppSettings, CleanupResult, SETTING_CONTAINER_ROOT, SETTING_NWJS_KEEP_LATEST_ONLY,
+    SetContainerRootInput,
 };
 use crate::service::{EngineService, GameService, download::nwjs};
 use std::sync::Arc;
@@ -21,10 +21,11 @@ pub struct SettingsState {
 pub async fn get_app_settings(state: State<'_, SettingsState>) -> Result<AppSettings, String> {
     let container_root = state.container_root.lock().await;
     let mut db_lock = state.db.lock().await;
-    let nwjs_keep_latest_only = crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
-        .await?
-        .map(|v| v != "0")
-        .unwrap_or(true);
+    let nwjs_keep_latest_only =
+        crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
+            .await?
+            .map(|v| v != "0")
+            .unwrap_or(true);
     Ok(AppSettings {
         container_root: container_root.clone(),
         nwjs_keep_latest_only,
@@ -118,13 +119,7 @@ pub async fn download_nwjs_stable(
     }
 
     if keep_latest_nwjs_enabled(&state.db).await? {
-        prune_old_nwjs_engines(
-            &engine_service,
-            &app,
-            current_id.as_deref(),
-            result.flavor,
-        )
-        .await?;
+        prune_old_nwjs_engines(&engine_service, &app, current_id.as_deref(), result.flavor).await?;
     }
 
     Ok(result)
@@ -207,10 +202,12 @@ fn is_same_nwjs_flavor(engine: &Engine, flavor: nwjs::NwjsFlavor) -> bool {
 
 async fn keep_latest_nwjs_enabled(db: &Arc<Mutex<toasty::Db>>) -> Result<bool, String> {
     let mut db_lock = db.lock().await;
-    Ok(crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
-        .await?
-        .map(|v| v != "0")
-        .unwrap_or(true))
+    Ok(
+        crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
+            .await?
+            .map(|v| v != "0")
+            .unwrap_or(true),
+    )
 }
 
 async fn prune_old_nwjs_engines(

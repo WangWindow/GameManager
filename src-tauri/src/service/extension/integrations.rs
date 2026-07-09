@@ -1,10 +1,10 @@
+#[cfg(target_os = "linux")]
+use super::BottlesService;
 use crate::commands::settings::SettingsState;
 use crate::model::{
     Capabilities, IntegrationOptions, IntegrationSettingsInput, IntegrationStatus,
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED,
 };
-#[cfg(target_os = "linux")]
-use super::BottlesService;
 use tauri::State;
 
 // ── Service helpers ──────────────────────────────────────────

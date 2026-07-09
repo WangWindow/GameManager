@@ -150,9 +150,9 @@ pub fn find_executable(
 }
 
 fn is_excluded(name: &str, patterns: &[String]) -> bool {
-    patterns.iter().any(|p| {
-        crate::engine::context::simple_glob_match(p, name)
-    })
+    patterns
+        .iter()
+        .any(|p| crate::engine::context::simple_glob_match(p, name))
 }
 
 #[cfg(test)]

@@ -8,10 +8,10 @@
 use std::path::Path;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
+    EnvFilter,
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
     util::SubscriberInitExt,
-    EnvFilter,
 };
 
 /// 初始化日志系统
@@ -25,8 +25,7 @@ use tracing_subscriber::{
 /// * `Err(String)` - 初始化失败的错误信息
 pub fn init_logger(log_dir: &Path, is_debug: bool) -> Result<(), String> {
     // 确保日志目录存在
-    std::fs::create_dir_all(log_dir)
-        .map_err(|e| format!("创建日志目录失败: {}", e))?;
+    std::fs::create_dir_all(log_dir).map_err(|e| format!("创建日志目录失败: {}", e))?;
 
     // 创建文件日志输出（按天轮转）
     let file_appender = RollingFileAppender::new(Rotation::DAILY, log_dir, "gamemanager.log");

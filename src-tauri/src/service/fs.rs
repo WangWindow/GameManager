@@ -3,7 +3,6 @@
 /// 合并自 `services/path.rs`（FileService）和 `services/utils.rs`（ArchiveService）。
 /// 路径工具函数（ensure_dir, canonicalize_path, is_within_dir）保留在 `services/path.rs`；
 /// 时间工具函数（now_unix_ms）保留在 `services/utils.rs`。
-
 use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Component, Path, PathBuf};
@@ -143,12 +142,9 @@ impl FileService {
 
         // 策略1: 尝试从可执行文件提取图标
         if let Some(icon_data) = self.extract_pe_icon(exe_path) {
-            if let Some(path) = self.save_icon_data_to_profile(
-                container_root,
-                profile_key,
-                &icon_data,
-                "exe",
-            ) {
+            if let Some(path) =
+                self.save_icon_data_to_profile(container_root, profile_key, &icon_data, "exe")
+            {
                 tracing::debug!(profile_key = %profile_key, "从可执行文件提取图标成功");
                 return Some(path);
             }
@@ -219,9 +215,9 @@ impl FileService {
         ensure_dir(&profile_dir).ok()?;
 
         // 尝试将 ICO 转换为 PNG 以获得更好的兼容性
-        let (data, ext) = self.convert_icon_to_png(icon_data).unwrap_or_else(|| {
-            (icon_data.to_vec(), "ico")
-        });
+        let (data, ext) = self
+            .convert_icon_to_png(icon_data)
+            .unwrap_or_else(|| (icon_data.to_vec(), "ico"));
 
         let target = profile_dir.join(format!("cover.{}", ext));
         std::fs::write(&target, data).ok()?;
@@ -383,10 +379,7 @@ impl FileService {
     }
 
     /// 读取游戏配置
-    pub fn read_game_config(
-        &self,
-        config_path: &Path,
-    ) -> Result<crate::model::GameConfig, String> {
+    pub fn read_game_config(&self, config_path: &Path) -> Result<crate::model::GameConfig, String> {
         let content =
             std::fs::read_to_string(config_path).map_err(|e| format!("读取配置文件失败: {}", e))?;
 

@@ -55,11 +55,7 @@ pub trait LaunchContext {
 /// 封面和图标资源提取能力。
 pub trait ResourceContext {
     /// 按优先级文件名列表查找封面图片
-    fn find_cover(
-        &self,
-        game_dir: &Path,
-        preferred_names: &[String],
-    ) -> Option<PathBuf>;
+    fn find_cover(&self, game_dir: &Path, preferred_names: &[String]) -> Option<PathBuf>;
 
     /// 从可执行文件中提取图标（返回 PNG 字节）
     fn extract_exe_icon(&self, exe_path: &Path) -> Option<Vec<u8>>;

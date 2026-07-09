@@ -40,11 +40,7 @@ pub async fn get_setting(db: &mut toasty::Db, key: &str) -> Result<Option<String
     Ok(setting.map(|s| s.value))
 }
 
-pub async fn set_setting(
-    db: &mut toasty::Db,
-    key: &str,
-    value: &str,
-) -> Result<(), String> {
+pub async fn set_setting(db: &mut toasty::Db, key: &str, value: &str) -> Result<(), String> {
     use schema::Setting;
 
     let existing = Setting::filter_by_key(key)

@@ -159,7 +159,8 @@ pub fn run() {
             // 初始化引擎注册表
             let engine_registry = {
                 let mut registry = crate::engine::EngineRegistry::new();
-                let engines_dir = app.path()
+                let engines_dir = app
+                    .path()
                     .app_data_dir()
                     .map(|p| p.join("engines"))
                     .unwrap_or_else(|_| PathBuf::from("engines"));
@@ -186,7 +187,11 @@ pub fn run() {
                 let db_clone = db.clone();
                 let registry = tauri::async_runtime::block_on(async move {
                     let mut db_lock = db_clone.lock().await;
-                    let ids: Vec<String> = registry.engine_ids().iter().map(|s| s.to_string()).collect();
+                    let ids: Vec<String> = registry
+                        .engine_ids()
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect();
                     for id in &ids {
                         let key = format!("engine.{}.enabled", id);
                         if let Ok(Some(val)) = crate::db::get_setting(&mut db_lock, &key).await {
@@ -200,9 +205,11 @@ pub fn run() {
             };
 
             // 管理状态
-            app.manage(commands::game::AppState {
+            app.manage(commands::state::AppState {
                 game_service: Arc::new(Mutex::new(game_service)),
-                engine_service: Arc::new(Mutex::new(crate::service::EngineService::new(db.clone()))),
+                engine_service: Arc::new(Mutex::new(crate::service::EngineService::new(
+                    db.clone(),
+                ))),
                 launcher_service: Arc::new(Mutex::new(launcher_service)),
                 db: db.clone(),
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
@@ -218,7 +225,9 @@ pub fn run() {
             app.manage(commands::settings::SettingsState {
                 db: db.clone(),
                 game_service: Arc::new(Mutex::new(crate::service::GameService::new(db.clone()))),
-                engine_service: Arc::new(Mutex::new(crate::service::EngineService::new(db.clone()))),
+                engine_service: Arc::new(Mutex::new(crate::service::EngineService::new(
+                    db.clone(),
+                ))),
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
             });
 

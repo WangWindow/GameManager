@@ -119,7 +119,11 @@ impl LauncherService {
         self.apply_args(&mut cmd, options);
 
         let app_path = self.resolve_nwjs_app_path(game_path, options.entry_path.as_deref());
-        let final_app_path = if app_path.extension().map(|e| e == "html" || e == "htm").unwrap_or(false) {
+        let final_app_path = if app_path
+            .extension()
+            .map(|e| e == "html" || e == "htm")
+            .unwrap_or(false)
+        {
             // 独立 HTML：在游戏目录放置 package.json（仅此最小文件），NW.js 以目录模式运行
             let dir = app_path.parent().unwrap_or(game_path);
             let pkg = dir.join("package.json");
@@ -335,7 +339,11 @@ impl LauncherService {
     fn resolve_nwjs_app_path(&self, game_path: &Path, entry_path: Option<&str>) -> PathBuf {
         if let Some(path) = self.resolve_entry_path(game_path, entry_path) {
             if path.is_file() {
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
                 if ext != "html" && ext != "htm" {
                     if let Some(parent) = path.parent() {
                         if parent.join("package.json").exists() {
