@@ -4,7 +4,7 @@ use std::path::Path;
 
 pub async fn init_db(db_path: &Path) -> Result<toasty::Db, String> {
     if let Some(parent) = db_path.parent() {
-        crate::util::path::ensure_dir(parent)?;
+        crate::utils::path::ensure_dir(parent)?;
     }
 
     let db_exists = db_path.exists();

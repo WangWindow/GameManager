@@ -1,8 +1,8 @@
-use crate::engine::EngineRegistry;
-use crate::model::GameConfig;
-use crate::service::{EngineService, FileService, GameService, LauncherService};
+use crate::engines::EngineRegistry;
+use crate::models::GameConfig;
+use crate::services::{EngineService, FileService, GameService, LauncherService};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::Mutex;
 
@@ -17,6 +17,14 @@ pub struct AppState {
     pub container_root: Arc<Mutex<String>>,
     pub engine_registry: Arc<Mutex<EngineRegistry>>,
     pub config_cache: ConfigCache,
+}
+
+impl AppState {
+    /// 获取容器根目录的规范化绝对路径。
+    pub(crate) async fn container_root_path(&self) -> PathBuf {
+        let root = self.container_root.lock().await;
+        crate::utils::path::canonicalize(Path::new(root.as_str()))
+    }
 }
 
 /// 带缓存的游戏配置读取。key = profile_key。
