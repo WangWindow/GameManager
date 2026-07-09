@@ -35,12 +35,14 @@ import { useDialogState, useDeleteConfirmState } from "@/hooks/useDialogState";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { usePersistedState, usePersistedBoolean } from "@/hooks/usePersistedState";
 import { useEngineRegistry } from "@/hooks/useEngineRegistry";
+import { useI18n } from "@/i18n";
 
 /** 游戏列表视图模式 */
 export type ViewMode = "grid" | "list";
 
 export default function App() {
   // ============ 对话框状态 ============
+  const { t } = useI18n();
   const manageDialog = useDialogState();
   const settingsDialog = useDialogState();
   const pluginsDialog = useDialogState();
@@ -103,14 +105,14 @@ export default function App() {
 
   // 引擎筛选选项（按分类分组，标签显示分类名而非引擎名）
   const filterOptions = useMemo(() => [
-    { value: "all", label: "全部" },
+    { value: "all", label: t("library.filterAll") },
     ...[...engineReg.categories.keys()].sort().map(cat => ({
       value: cat,
       label: cat === "nwjs" ? "NW.js" :
              cat === "renpy" ? "Ren'Py" :
-             cat === "other" ? "其他" : cat,
+             cat === "other" ? t("library.filterOther") : cat,
     }))
-  ], [engineReg.categories]);
+  ], [engineReg.categories, t]);
 
   // 过滤后的游戏列表
   const filteredGames = useMemo(() => {
@@ -156,9 +158,9 @@ export default function App() {
   const onLaunchGame = useCallback(async (id: string) => {
     const success = await handleLaunchGame(id);
     if (success) {
-      toast.success("游戏启动成功");
+      toast.success(t("toast.launchSuccess"));
     }
-  }, [handleLaunchGame]);
+  }, [handleLaunchGame, t]);
 
   const onEditGame = useCallback((id: string) => {
     gameSettingsDialog.open(id);
@@ -175,9 +177,9 @@ export default function App() {
     deleteConfirm.close();
     const success = await handleDeleteGame(id);
     if (success) {
-      toast.success("游戏删除成功");
+      toast.success(t("toast.deleteSuccess"));
     }
-  }, [deleteConfirm, handleDeleteGame]);
+  }, [deleteConfirm, handleDeleteGame, t]);
 
   const openImportDialog = useCallback(() => {
     importDialog.open("");
@@ -280,8 +282,8 @@ export default function App() {
       {isDragging ? (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur">
           <div className="rounded-2xl border-2 border-dashed border-primary/50 bg-background/80 px-8 py-6 text-center">
-            <div className="mb-2 text-sm font-semibold">拖拽文件以导入游戏</div>
-            <div className="text-xs text-muted-foreground">仅支持可执行文件</div>
+            <div className="mb-2 text-sm font-semibold">{t("drag.dropHint")}</div>
+            <div className="text-xs text-muted-foreground">{t("drag.executableOnly")}</div>
           </div>
         </div>
       ) : null}
@@ -290,7 +292,7 @@ export default function App() {
         <div className="border-t bg-background/70 px-4 py-2 text-xs backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 truncate">
-              <span className="font-medium">状态：</span>
+              <span className="font-medium">{t("statusBar.status")}</span>
               <span className="text-muted-foreground">{currentTask?.label}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -303,7 +305,7 @@ export default function App() {
         </div>
       ) : null}
 
-      <Toaster position="bottom-right" />
+      <Toaster position="bottom-right" theme={themeMode} />
     </div>
   );
 }

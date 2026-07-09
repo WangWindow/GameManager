@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { getEngineRegistryDetail, getEngineProfileDetail, setEngineEnabled } from "@/lib/api";
+import { useI18n } from "@/i18n";
 import type { EngineDetail, EngineProfileDetail } from "@/types";
 
 interface PluginsDialogProps {
@@ -18,6 +19,7 @@ interface PluginsDialogProps {
 }
 
 export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps) {
+  const { t } = useI18n();
   const [plugins, setPlugins] = useState<EngineDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
     try {
       await setEngineEnabled(id, enabled);
       setPlugins((prev) => prev.map((p) => (p.id === id ? { ...p, enabled } : p)));
+      window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
       console.error("切换插件状态失败:", e);
     }
@@ -65,7 +68,11 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
   }
 
   useEffect(() => {
-    if (open) fetchPlugins();
+    if (!open) return;
+    setExpandedId(null);
+    setDetailLoading(null);
+    setDetailCache(new Map());
+    void fetchPlugins();
   }, [open]);
 
   return (
@@ -74,7 +81,7 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon icon="ri:plugin-line" className="h-5 w-5" />
-            引擎插件
+            {t("plugins.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -86,7 +93,7 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
           </div>
 
           {plugins.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">暂无插件</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">{t("plugins.empty")}</p>
           ) : (
             <div className="max-h-96 space-y-1.5 overflow-y-auto">
               {plugins.map((p) => {
@@ -107,12 +114,12 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
                             <span className="truncate font-medium">{p.name}</span>
                             {!p.valid && (
                               <span className="shrink-0 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive" title={p.errors.join("; ")}>
-                                无效
+                                {t("plugins.invalid")}
                               </span>
                             )}
                           </div>
                           <span className="text-[10px] text-muted-foreground">
-                            {p.ruleCount} 条规则 · {p.strategy}
+                            {t("plugins.ruleCountStrategy", { count: p.ruleCount, strategy: p.strategy })}
                           </span>
                         </div>
                         <Icon
@@ -133,13 +140,13 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
                         {isLoading ? (
                           <div className="flex items-center gap-2 py-2 text-muted-foreground">
                             <Icon icon="ri:loader-4-line" className="animate-spin h-3 w-3" />
-                            加载中…
+                            {t("common.loading")}
                           </div>
                         ) : detail ? (
                           <div className="space-y-2">
                             <div>
-                              <span className="font-semibold">检测规则</span>
-                              <span className="ml-1 text-muted-foreground">（最低 {detail.detection.minScore} 分）</span>
+                              <span className="font-semibold">{t("plugins.detectionRules")}</span>
+                              <span className="ml-1 text-muted-foreground">{t("plugins.minScore", { score: detail.detection.minScore })}</span>
                               <div className="mt-1 space-y-0.5">
                                 {detail.detection.rules.map((r, i) => (
                                   <div key={i} className="flex items-center gap-2 text-muted-foreground">
@@ -151,25 +158,25 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
                               </div>
                             </div>
                             <div>
-                              <span className="font-semibold">启动配置</span>
+                              <span className="font-semibold">{t("plugins.launchConfig")}</span>
                               <div className="mt-1 space-y-0.5 text-muted-foreground">
-                                <div>策略: {detail.launch.strategy}</div>
+                                <div>{t("plugins.strategy")}: {detail.launch.strategy}</div>
                                 {detail.launch.entryPatterns.length > 0 && (
-                                  <div>入口: {detail.launch.entryPatterns.join(", ")}</div>
+                                  <div>{t("plugins.entry")}: {detail.launch.entryPatterns.join(", ")}</div>
                                 )}
                                 {detail.launch.excludePatterns.length > 0 && (
-                                  <div>排除: {detail.launch.excludePatterns.join(", ")}</div>
+                                  <div>{t("plugins.exclude")}: {detail.launch.excludePatterns.join(", ")}</div>
                                 )}
-                                {detail.launch.runtimeId && <div>运行时: {detail.launch.runtimeId}</div>}
-                                {detail.launch.program && <div>外部程序: {detail.launch.program}</div>}
+                                {detail.launch.runtimeId && <div>{t("plugins.runtime")}: {detail.launch.runtimeId}</div>}
+                                {detail.launch.program && <div>{t("plugins.externalProgram")}: {detail.launch.program}</div>}
                               </div>
                             </div>
                             {detail.errors.length > 0 && (
-                              <div className="text-destructive">错误: {detail.errors.join("; ")}</div>
+                              <div className="text-destructive">{t("plugins.errors")}: {detail.errors.join("; ")}</div>
                             )}
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">加载失败</span>
+                          <span className="text-muted-foreground">{t("plugins.loadFailed")}</span>
                         )}
                       </div>
                     )}
@@ -182,7 +189,7 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
 
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={() => onOpenChange?.(false)}>
-            关闭
+            {t("common.close")}
           </Button>
         </DialogFooter>
       </DialogContent>

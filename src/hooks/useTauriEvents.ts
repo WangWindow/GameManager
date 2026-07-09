@@ -1,6 +1,9 @@
 import { useEffect } from "react";
+import { useI18n } from "@/i18n";
 
 export function useTauriEvents(updateTask: (label: string, progress: number) => void) {
+  const { t } = useI18n();
+
   useEffect(() => {
     let unlisteners: Array<() => void> = [];
     (async () => {
@@ -16,7 +19,7 @@ export function useTauriEvents(updateTask: (label: string, progress: number) => 
           percent?: number | null;
         }>("nwjs_download_progress", (event) => {
           const p = event.payload?.percent ?? 0;
-          updateTask(`下载 NW.js ${event.payload.version}（${event.payload.flavor}）`, p);
+          updateTask(t("task.downloadNwjs", { version: event.payload.version, flavor: event.payload.flavor }), p);
         });
         unlisteners.push(u1);
 
@@ -28,7 +31,7 @@ export function useTauriEvents(updateTask: (label: string, progress: number) => 
           stage: "downloaded" | "installed";
           label: string;
         }>("nwjs_install_stage", (event) => {
-          const label = event.payload?.label ?? "处理中…";
+          const label = event.payload?.label ?? t("task.processing");
           updateTask(label, 100);
         });
         unlisteners.push(u2);
@@ -36,7 +39,7 @@ export function useTauriEvents(updateTask: (label: string, progress: number) => 
         const u3 = await listen<{ taskId: string; label: string; progress: number }>(
           "scan_progress",
           (event) => {
-            updateTask(event.payload?.label ?? "扫描中…", Number(event.payload?.progress ?? 0));
+            updateTask(event.payload?.label ?? t("task.scanning"), Number(event.payload?.progress ?? 0));
           },
         );
         unlisteners.push(u3);
@@ -53,5 +56,5 @@ export function useTauriEvents(updateTask: (label: string, progress: number) => 
       });
       unlisteners = [];
     };
-  }, [updateTask]);
+  }, [t, updateTask]);
 }

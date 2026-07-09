@@ -1,5 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { getLocale, translate } from "@/i18n"
+import type { Locale } from "@/i18n/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -7,11 +9,14 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * 格式化时间戳为日期字符串
+ *
+ * @param timestamp 时间戳（毫秒）
+ * @param locale 可选语言，默认使用当前 i18n 语言
  */
-export function formatDate(timestamp?: number): string {
-  if (!timestamp) return '从未'
+export function formatDate(timestamp?: number, locale?: Locale): string {
+  if (!timestamp) return translate("time.never", undefined, locale ?? getLocale())
   const date = new Date(timestamp)
-  return date.toLocaleDateString('zh-CN', {
+  return date.toLocaleDateString(locale ?? getLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -20,9 +25,13 @@ export function formatDate(timestamp?: number): string {
 
 /**
  * 格式化时间戳为相对时间
+ *
+ * @param timestamp 时间戳（毫秒）
+ * @param locale 可选语言，默认使用当前 i18n 语言
  */
-export function formatRelativeTime(timestamp?: number): string {
-  if (!timestamp) return '从未'
+export function formatRelativeTime(timestamp?: number, locale?: Locale): string {
+  const lng = locale ?? getLocale()
+  if (!timestamp) return translate("time.never", undefined, lng)
 
   const now = Date.now()
   const diff = now - timestamp
@@ -32,15 +41,15 @@ export function formatRelativeTime(timestamp?: number): string {
   const days = Math.floor(hours / 24)
 
   if (days > 30) {
-    return formatDate(timestamp)
+    return formatDate(timestamp, lng)
   } else if (days > 0) {
-    return `${days}天前`
+    return translate("time.daysAgo", { count: days }, lng)
   } else if (hours > 0) {
-    return `${hours}小时前`
+    return translate("time.hoursAgo", { count: hours }, lng)
   } else if (minutes > 0) {
-    return `${minutes}分钟前`
+    return translate("time.minutesAgo", { count: minutes }, lng)
   } else {
-    return '刚刚'
+    return translate("time.justNow", undefined, lng)
   }
 }
 

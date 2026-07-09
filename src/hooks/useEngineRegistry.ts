@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useCallback, useEffect, useState, useMemo } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import type { EngineProfile } from "@/types/engine"
 
@@ -20,25 +20,66 @@ interface EngineRegistry {
   getIdsByCategory: (category: string) => string[]
   /** 加载状态 */
   loading: boolean
+  /** 清除模块级缓存并重新拉取引擎注册表 */
+  refresh: () => void
 }
 
 let cachedEngines: EngineProfile[] | null = null
+let pendingEngines: Promise<EngineProfile[]> | null = null
+let pendingIsRefresh = false
+
+function loadEngines(force = false): Promise<EngineProfile[]> {
+  if (!force && cachedEngines) {
+    return Promise.resolve(cachedEngines)
+  }
+  if (force && !pendingIsRefresh) {
+    pendingEngines = null
+    pendingIsRefresh = true
+  }
+  if (!pendingEngines) {
+    pendingEngines = invoke<EngineProfile[]>("get_engine_registry")
+      .then((data) => {
+        cachedEngines = data
+        return data
+      })
+      .finally(() => {
+        pendingEngines = null
+        pendingIsRefresh = false
+      })
+  }
+  return pendingEngines
+}
 
 export function useEngineRegistry(): EngineRegistry {
   const [engines, setEngines] = useState<EngineProfile[]>(cachedEngines ?? [])
   const [loading, setLoading] = useState(!cachedEngines)
 
-  useEffect(() => {
-    if (cachedEngines) return
-
-    invoke<EngineProfile[]>("get_engine_registry")
+  const fetchEngines = useCallback((force = false) => {
+    setLoading(true)
+    loadEngines(force)
       .then((data) => {
-        cachedEngines = data
         setEngines(data)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  const refresh = useCallback(() => {
+    cachedEngines = null
+    fetchEngines(true)
+  }, [fetchEngines])
+
+  useEffect(() => {
+    if (cachedEngines) return
+    fetchEngines()
+  }, [fetchEngines])
+
+  // gm:refresh-engines 的缓存失效入口：由 PluginsDialog/useMaintenanceActions 派发
+  useEffect(() => {
+    const handler = () => refresh()
+    window.addEventListener("gm:refresh-engines", handler)
+    return () => window.removeEventListener("gm:refresh-engines", handler)
+  }, [refresh])
 
   const categories = useMemo(() => {
     const map = new Map<string, EngineProfile[]>()
@@ -66,5 +107,6 @@ export function useEngineRegistry(): EngineRegistry {
     getCategory: (id) => engineMap.get(id)?.category ?? "other",
     getIdsByCategory: (cat) =>
       engines.filter((e) => e.category === cat).map((e) => e.id),
+    refresh,
   }
 }

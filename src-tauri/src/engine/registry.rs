@@ -422,4 +422,58 @@ entry_patterns = ["game"]
         assert_eq!(dtos[0].id, "test-engine");
         assert_eq!(dtos[0].name, "Test Engine");
     }
+
+    #[test]
+    fn should_skip_scan_returns_true_for_skip_scan_engine() {
+        let mut registry = make_test_registry();
+        // Mark engine as skip_scan in its profile
+        registry
+            .entries
+            .get_mut("test-engine")
+            .unwrap()
+            .profile
+            .meta
+            .skip_scan = true;
+
+        assert!(registry.should_skip_scan("test-engine"));
+        assert!(!registry.should_skip_scan("nonexistent"));
+    }
+
+    #[test]
+    fn detect_still_finds_skip_scan_engine_detection_is_separate_from_skip_scan() {
+        let mut registry = make_test_registry();
+        // skip_scan means "don't auto-import during scan", but detection
+        // should still recognize the engine — the caller checks skip_scan separately.
+        registry
+            .entries
+            .get_mut("test-engine")
+            .unwrap()
+            .profile
+            .meta
+            .skip_scan = true;
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("marker.txt"), b"").unwrap();
+
+        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
+        let result = registry.detect(&ctx);
+        assert!(result.is_some());
+        let (id, _confidence) = result.unwrap();
+        assert_eq!(id, "test-engine");
+        // Caller must check should_skip_scan separately
+        assert!(registry.should_skip_scan(id));
+    }
+
+    #[test]
+    fn detect_skips_invalid_engine() {
+        let mut registry = make_test_registry();
+        registry.entries.get_mut("test-engine").unwrap().valid = false;
+        registry.entries.get_mut("test-engine").unwrap().enabled = false;
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("marker.txt"), b"").unwrap();
+
+        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
+        assert!(registry.detect(&ctx).is_none());
+    }
 }

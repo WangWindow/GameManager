@@ -6,6 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import { useI18n } from '@/i18n'
 
 export interface DragDropState {
   /** 是否正在拖拽 */
@@ -33,6 +34,7 @@ export interface DragDropState {
  * }, [droppedPath])
  */
 export function useDragDrop(onDrop?: (path: string) => void): DragDropState {
+  const { t } = useI18n()
   const [isDragging, setIsDragging] = useState(false)
   const [droppedPath, setDroppedPath] = useState('')
   const unlistenRef = useRef<(() => void) | null>(null)
@@ -52,8 +54,8 @@ export function useDragDrop(onDrop?: (path: string) => void): DragDropState {
     if (onDropRef.current) {
       onDropRef.current(path)
     }
-    toast.info('已选择拖拽文件，请选择引擎类型')
-  }, [])
+    toast.info(t('drag.dropSelected'))
+  }, [t])
 
   // Tauri 拖拽事件处理
   useEffect(() => {
@@ -87,7 +89,7 @@ export function useDragDrop(onDrop?: (path: string) => void): DragDropState {
             if (path) {
               handleFileDrop(path)
             } else {
-              toast.error('仅支持拖拽本地可执行文件')
+              toast.error(t('drag.localExecutableOnly'))
             }
           }
         })
@@ -126,7 +128,7 @@ export function useDragDrop(onDrop?: (path: string) => void): DragDropState {
       const path = (file as File & { path?: string }).path
       setIsDragging(false)
       if (!path) {
-        toast.error('仅支持拖拽本地可执行文件')
+        toast.error(t('drag.localExecutableOnly'))
         return
       }
       handleFileDrop(path)
@@ -160,7 +162,7 @@ export function useDragDrop(onDrop?: (path: string) => void): DragDropState {
       }
       unlistenRef.current = null
     }
-  }, [handleFileDrop])
+  }, [handleFileDrop, t])
 
   return { isDragging, droppedPath, clearDroppedPath }
 }

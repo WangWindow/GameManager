@@ -1,4 +1,5 @@
 import { useState, useEffect, ReactNode } from "react";
+import { useI18n } from "@/i18n";
 
 interface AppLoaderProps {
   children: ReactNode;
@@ -8,11 +9,12 @@ interface AppLoaderProps {
 
 /**
  * 应用加载器组件
- * 
+ *
  * 在应用初始化期间显示加载界面，防止白屏。
  * 等待 Tauri 环境就绪后再渲染主应用。
  */
 export function AppLoader({ children, minLoadTime = 300 }: AppLoaderProps) {
+  const { t } = useI18n();
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,25 +37,25 @@ export function AppLoader({ children, minLoadTime = 300 }: AppLoaderProps) {
         setIsReady(true);
       } catch (err) {
         console.error("应用初始化失败:", err);
-        setError(err instanceof Error ? err.message : "初始化失败");
+        setError(err instanceof Error ? err.message : t("loader.initFailed"));
       }
     }
 
     initialize();
-  }, [minLoadTime]);
+  }, [minLoadTime, t]);
 
   if (error) {
     return (
       <div className="loader-container">
         <div className="loader-content">
           <div className="loader-icon">❌</div>
-          <div className="loader-text">初始化失败</div>
+          <div className="loader-text">{t("loader.initFailed")}</div>
           <div className="loader-subtext">{error}</div>
           <button
             onClick={() => window.location.reload()}
             className="loader-button"
           >
-            重试
+            {t("loader.retry")}
           </button>
         </div>
       </div>
@@ -66,7 +68,7 @@ export function AppLoader({ children, minLoadTime = 300 }: AppLoaderProps) {
         <div className="loader-content">
           <div className="loader-spinner" />
           <div className="loader-text">GameManager</div>
-          <div className="loader-subtext">正在加载...</div>
+          <div className="loader-subtext">{t("loader.loading")}</div>
         </div>
       </div>
     );

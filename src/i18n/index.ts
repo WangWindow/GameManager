@@ -1,5 +1,6 @@
 import i18n from "i18next";
 import { initReactI18next, useTranslation } from "react-i18next";
+import { useCallback, useMemo } from "react";
 import { enUSMessages } from "./locales/en-US";
 import { zhCNMessages } from "./locales/zh-CN";
 import type { Locale, MessageMap } from "./types";
@@ -68,11 +69,14 @@ export function translate(
 export function useI18n() {
   const { t, i18n: instance } = useTranslation();
   const locale = normalizeLocale(instance.resolvedLanguage ?? instance.language);
+  const translateMessage = useCallback(
+    (key: string, params?: Record<string, string | number>) => t(key, params),
+    [t],
+  );
 
-  return {
+  return useMemo(() => ({
     locale,
     setLocale,
-    t: (key: string, params?: Record<string, string | number>) =>
-      t(key, params),
-  };
+    t: translateMessage,
+  }), [locale, translateMessage]);
 }

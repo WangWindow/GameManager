@@ -17,7 +17,7 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game, isLaunching = false, onLaunch, onEdit, onDelete }: GameCardProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { getName, getIcon } = useEngineRegistry();
   const coverSrc = useMemo(() => {
     if (!game.coverPath) return "";
@@ -64,7 +64,7 @@ export default function GameCard({ game, isLaunching = false, onLaunch, onEdit, 
           <Icon icon={getIcon(game.engineType)} className="h-3.5 w-3.5" />
           <span className="truncate">{getName(game.engineType)}</span>
           {game.lastPlayedAt && (
-            <span className="truncate">· {formatRelativeTime(game.lastPlayedAt)}</span>
+            <span className="truncate">· {formatRelativeTime(game.lastPlayedAt, locale)}</span>
           )}
         </div>
       </div>

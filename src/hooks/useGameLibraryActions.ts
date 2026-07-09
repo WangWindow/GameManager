@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { importGameDir, scanGames, saveGameSettings, updateGame, refreshGameCover } from "@/lib/api";
+import { useI18n } from "@/i18n";
 import type { GameConfig } from "@/types";
 
 interface Options {
@@ -12,6 +13,7 @@ interface Options {
 }
 
 export function useGameLibraryActions(options: Options) {
+  const { t } = useI18n();
   const [importLoading, setImportLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -22,13 +24,13 @@ export function useGameLibraryActions(options: Options) {
     setImportLoading(true);
     try {
       await importGameDir(payload.executablePath, payload.engineType);
-      toast.success("导入成功");
+      toast.success(t("toast.importSuccess"));
       options.closeImport();
       await options.refresh(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "导入失败";
+      const msg = e instanceof Error ? e.message : t("toast.importFailed");
       if (typeof msg === "string" && msg.includes("已存在")) {
-        toast.error("该游戏已存在");
+        toast.error(t("toast.gameExists"));
       } else {
         toast.error(msg);
       }
@@ -42,12 +44,12 @@ export function useGameLibraryActions(options: Options) {
     setScanLoading(true);
     try {
       const res = await scanGames(payload);
-      toast.success(`扫描完成：新增 ${res.imported}，已存在 ${res.skippedExisting}`);
-      options.updateTask("扫描完成", 100);
+      toast.success(t("toast.scanComplete", { imported: res.imported, skipped: res.skippedExisting }));
+      options.updateTask(t("task.scanComplete"), 100);
       options.closeScan();
       await options.refresh(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "扫描失败";
+      const msg = e instanceof Error ? e.message : t("toast.scanFailed");
       toast.error(msg);
     } finally {
       setScanLoading(false);
@@ -72,11 +74,11 @@ export function useGameLibraryActions(options: Options) {
         runtimeVersion: payload.runtimeVersion,
       });
       await saveGameSettings(payload.id, payload.settings);
-      toast.success("已保存游戏设置");
+      toast.success(t("toast.settingsSaved"));
       options.closeGameSettings();
       await options.refresh(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "保存失败";
+      const msg = e instanceof Error ? e.message : t("toast.saveFailed");
       toast.error(msg);
     } finally {
       setSaveLoading(false);
@@ -88,10 +90,10 @@ export function useGameLibraryActions(options: Options) {
     setCoverRefreshing(true);
     try {
       await refreshGameCover(id);
-      toast.success("图标已更新");
+      toast.success(t("toast.coverUpdated"));
       await options.refresh(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "图标更新失败";
+      const msg = e instanceof Error ? e.message : t("toast.coverUpdateFailed");
       toast.error(msg);
     } finally {
       setCoverRefreshing(false);

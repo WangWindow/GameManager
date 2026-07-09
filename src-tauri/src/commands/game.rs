@@ -1,5 +1,6 @@
 use crate::db::schema::Game;
 use crate::engine::EngineRegistry;
+use crate::engine::context::FsDetectionContext;
 use crate::model::{
     AddGameInput, EngineType, GameConfig, GameDto,
     ImportGameInput, LaunchResult, ScanGamesInput, ScanGamesResult, UpdateGameInput,
@@ -201,7 +202,7 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
     drop(container_root);
 
     // 获取 NW.js 运行时（MV/MZ 及所有 nwjs 策略的引擎，如 HTML）
-    let mut engine_type = EngineType::from_str(&game.engine_type);
+    let engine_type = EngineType::from_str(&game.engine_type);
     let needs_nwjs = {
         let registry = state.engine_registry.lock().await;
         if let Some(entry) = registry.get_entry(&game.engine_type) {
@@ -482,14 +483,14 @@ pub async fn scan_games(
             continue;
         }
 
-        if let Some(engine_type) = detect_engine_type(&dir) {
-            // 跳过标记为 skip_scan 的引擎（仅手动导入）
-            {
-                let registry = state.engine_registry.lock().await;
-                if registry.should_skip_scan(&engine_type) {
-                    continue;
-                }
-            }
+        let detection = {
+            let registry = state.engine_registry.lock().await;
+            let ctx = FsDetectionContext::new(dir.clone());
+            registry.detect(&ctx)
+                .filter(|(id, _)| !registry.should_skip_scan(id))
+                .map(|(id, confidence)| (id.to_string(), confidence))
+        };
+        if let Some((engine_type, confidence)) = detection {
             found_games += 1;
             let path_str = normalize_path(&dir);
             if existing_paths.contains(&path_str) {
@@ -500,7 +501,7 @@ pub async fn scan_games(
                     engine_type: engine_type.clone(),
                     path: path_str.clone(),
                     game_type: None,
-                    detection_confidence: None,
+                    detection_confidence: Some(confidence),
                     metadata_json: None,
                     runtime_version: None,
                 };

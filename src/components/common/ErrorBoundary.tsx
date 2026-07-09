@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { translate } from "@/i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -12,7 +13,7 @@ interface ErrorBoundaryState {
 
 /**
  * 错误边界组件
- * 
+ *
  * 捕获子组件树中的 JavaScript 错误，防止整个应用崩溃白屏。
  * 显示友好的错误提示界面。
  */
@@ -46,23 +47,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-lg">
             <div className="mb-4 text-4xl">😵</div>
             <h2 className="mb-2 text-lg font-semibold text-foreground">
-              应用程序出错了
+              {translate("errorBoundary.title")}
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              {this.state.error?.message || "发生了未知错误"}
+              {this.state.error?.message || translate("errorBoundary.unknown")}
             </p>
             <div className="flex justify-center gap-2">
               <button
                 onClick={this.handleReload}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
-                重新加载
+                {translate("errorBoundary.reload")}
               </button>
             </div>
             {import.meta.env.DEV && this.state.error?.stack && (
               <details className="mt-4 text-left">
                 <summary className="cursor-pointer text-xs text-muted-foreground">
-                  错误详情
+                  {translate("errorBoundary.details")}
                 </summary>
                 <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
                   {this.state.error.stack}

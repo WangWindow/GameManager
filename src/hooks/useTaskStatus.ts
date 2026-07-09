@@ -1,11 +1,11 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import type { TaskStatus } from "@/types";
 
 export function useTaskStatus() {
   const [currentTask, setCurrentTask] = useState<TaskStatus | null>(null);
   const taskClearTimerRef = useRef<number | null>(null);
 
-  function updateTask(label: string, progress: number) {
+  const updateTask = useCallback((label: string, progress: number) => {
     if (taskClearTimerRef.current) {
       window.clearTimeout(taskClearTimerRef.current);
       taskClearTimerRef.current = null;
@@ -17,7 +17,7 @@ export function useTaskStatus() {
         setCurrentTask(null);
       }, 1200);
     }
-  }
+  }, []);
 
   const statusBarVisible = useMemo(() => currentTask !== null, [currentTask]);
 
