@@ -237,6 +237,7 @@ pub fn run() {
             commands::add_game,
             commands::update_game,
             commands::delete_game,
+            commands::remove_all_games,
             commands::launch_game,
             commands::import_game_dir,
             commands::scan_games,

@@ -69,6 +69,7 @@ export default function GameSettingsDialog({
   const [engineType, setEngineType] = useState<string>("");
   const [path, setPath] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("");
+  const [runner, setRunner] = useState<GameConfig["runner"]>("auto");
   const [entryPath, setEntryPath] = useState("");
   const [argsText, setArgsText] = useState("");
   const [sandboxHome, setSandboxHome] = useState(true);
@@ -86,7 +87,7 @@ export default function GameSettingsDialog({
   const [bottleName, setBottleName] = useState("");
   const [useBottles, setUseBottles] = useState(false);
 
-  const isNwjs = useMemo(() => getCategory(engineType) === "nwjs", [engineType, getCategory]);
+  const isNwjs = useMemo(() => runner === "nwjs" || (runner === "auto" && getCategory(engineType) === "nwjs"), [engineType, getCategory, runner]);
   const requiresEntryPath = useMemo(() => getCategory(engineType) === "other", [engineType, getCategory]);
   const canSave = useMemo(() => {
     const basicValid = !!game && title.trim().length > 0 && path.trim().length > 0;
@@ -102,6 +103,7 @@ export default function GameSettingsDialog({
       setArgsText("");
       setSandboxHome(true);
       setCoverFile("");
+      setRunner("auto");
       setBottleName("");
       setSettingsLoaded(false);
     }
@@ -128,12 +130,15 @@ export default function GameSettingsDialog({
         const resolvedEntry = config.entryPath ? toAbsoluteEntryPath(config.entryPath) : "";
         setEntryPath(resolvedEntry);
         setRuntimeVersion(config.runtimeVersion ?? game.runtimeVersion ?? "");
+        setRunner(config.runner ?? "auto");
         setArgsText((config.args ?? []).join(" "));
         setSandboxHome(config.sandboxHome ?? true);
         setCoverFile(config.coverFile ?? "");
         setBottleName(config.bottleName ?? "");
-        setUseBottles(config.useBottles ?? resolvedEntry.toLowerCase().endsWith(".exe"));
-        return refreshBottlesStatus();
+        setUseBottles(config.useBottles ?? (config.runner === "bottles" || resolvedEntry.toLowerCase().endsWith(".exe")));
+        // Bottles 探测可能执行外部 CLI，不能阻塞设置界面首次显示。
+        void refreshBottlesStatus();
+        return undefined;
       })
       .then(() => {
         if (!bottleName && defaultBottle) {
@@ -152,15 +157,21 @@ export default function GameSettingsDialog({
   // when engine type toggles to "other" while dialog is open, refresh bottles
   const engineCategory = useMemo(() => getCategory(engineType), [engineType, getCategory]);
   useEffect(() => {
-    if (engineCategory === "other" && open && !bottlesLoading) {
+    if ((engineCategory === "other" || runner === "bottles") && open && !bottlesLoading) {
       refreshBottlesStatus();
     }
-  }, [engineCategory, open]);
+  }, [engineCategory, runner, open]);
 
   // entryPath 变化时自动调整 Bottles 开关
   useEffect(() => {
-    if (getCategory(engineType) === "other") {
-      setUseBottles(entryPath.toLowerCase().endsWith(".exe"));
+    const lower = entryPath.toLowerCase();
+    if (lower.endsWith(".exe")) {
+      setRunner("bottles");
+      setUseBottles(true);
+    } else if ([".sh", ".appimage", ".run", ".x86_64"].some((ext) => lower.endsWith(ext))) {
+      setRunner("native");
+      setSandboxHome(true);
+      setUseBottles(false);
     }
   }, [entryPath]);
 
@@ -174,6 +185,7 @@ export default function GameSettingsDialog({
       engineType: resolvedEngineType,
       entryPath: resolvedEntryPath,
       runtimeVersion: runtimeVersion.trim() || undefined,
+      runner: runner ?? "auto",
       args,
       sandboxHome,
       useBottles: useBottles && bottlesAvailable && bottlesInstalled,
@@ -422,7 +434,22 @@ export default function GameSettingsDialog({
               </div>
             </FormRow>
 
-            {getCategory(engineType) === "other" && bottlesAvailable && bottlesInstalled && (
+            <FormRow label="启动方式">
+              <Select value={runner ?? "auto"} onValueChange={(v) => {
+                setRunner(v as GameConfig["runner"]);
+                if (v !== "bottles") setUseBottles(false);
+              }}>
+                <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">跟随引擎默认</SelectItem>
+                  <SelectItem value="native">Linux 原生</SelectItem>
+                  <SelectItem value="nwjs">NW.js</SelectItem>
+                  <SelectItem value="bottles">Bottles</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormRow>
+
+            {(runner === "bottles" || (runner === "auto" && getCategory(engineType) === "other")) && bottlesAvailable && bottlesInstalled && (
               <>
                 <FormRow label="使用 Bottles">
                   <Switch

@@ -6,32 +6,31 @@ icon = "ri:gamepad-line"
 priority = 6
 
 [detection]
-min_score = 4
+min_score = 0
 
-[[detection.rules]]
+[[detection.required]]
 type = "has_extension"
 ext = "pck"
-weight = 3
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = ".godot/global_script_class_cache.cfg"
 weight = 2
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = ".godot/extension_list.cfg"
 weight = 2
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "project.godot"
 weight = 2
 
 [launch]
-strategy = "native"
-entry_patterns = ["Game.exe", "*.exe"]
+strategy = "bottles"
+entry_patterns = ["@native", "*.exe"]
 exclude_patterns = ["crashpad_handler.exe", "crashpad_handler*"]
 args = []
-sandbox_home = false
+sandbox_home = true
 preserve_dirs = ["user", "save"]

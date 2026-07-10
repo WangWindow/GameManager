@@ -141,6 +141,9 @@ pub fn build_strategy(name: &str) -> Result<Box<dyn LaunchStrategy>, String> {
         "native" => Ok(Box::new(NativeLauncher)),
         "nwjs" => Ok(Box::new(NwJsLauncher)),
         "external" => Ok(Box::new(ExternalLauncher)),
+        // Bottles 需要游戏级配置（bottle 名称和全局集成状态），实际执行由
+        // launcher service 完成；这里保留可验证的插件策略占位实现。
+        "bottles" => Ok(Box::new(NativeLauncher)),
         other => Err(format!("未知的启动策略: {}", other)),
     }
 }

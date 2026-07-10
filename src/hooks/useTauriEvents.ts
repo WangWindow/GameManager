@@ -43,6 +43,11 @@ export function useTauriEvents(updateTask: (label: string, progress: number) => 
           },
         );
         unlisteners.push(u3);
+
+        const u4 = await listen("game_covers_updated", () => {
+          window.dispatchEvent(new CustomEvent("gm:refresh-games"));
+        });
+        unlisteners.push(u4);
       } catch {
         // ignore when not in tauri
       }

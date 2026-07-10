@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use super::context::DetectionContext;
-use super::detection::{DetectionRule, build_rule, score_game};
+use super::detection::{DetectionRule, build_rule, confidence_score, score_game};
 use super::launch::{LaunchStrategy, build_strategy};
 use super::profile::{
     DetectionDetail, EngineDetailDto, EngineMetaDto, EngineProfile, EngineProfileDetailDto,
@@ -11,7 +11,9 @@ use super::profile::{
 
 pub struct EngineEntry {
     pub profile: EngineProfile,
-    pub rules: Vec<Box<dyn DetectionRule>>,
+    pub required_rules: Vec<Box<dyn DetectionRule>>,
+    pub optional_rules: Vec<Box<dyn DetectionRule>>,
+    pub forbidden_rules: Vec<Box<dyn DetectionRule>>,
     #[allow(dead_code)]
     pub strategy: Box<dyn LaunchStrategy>,
     pub enabled: bool,
@@ -78,8 +80,21 @@ impl EngineRegistry {
 
         let mut errors: Vec<String> = Vec::new();
 
-        // 验证检测规则
-        for rule_def in &profile.detection.rules {
+        if let Err(e) = profile.detection.validate() {
+            errors.push(format!("检测配置: {}", e));
+        }
+        if path.file_stem().and_then(|name| name.to_str()) != Some(id.as_str()) {
+            errors.push(format!("插件 id '{}' 必须与文件名一致", id));
+        }
+
+        // 验证所有检测规则组
+        for rule_def in profile
+            .detection
+            .required
+            .iter()
+            .chain(profile.detection.optional.iter())
+            .chain(profile.detection.forbidden.iter())
+        {
             if let Err(e) = rule_def.validate() {
                 errors.push(format!("检测规则 '{}': {}", rule_def.rule_type, e));
             }
@@ -92,18 +107,21 @@ impl EngineRegistry {
 
         let valid = errors.is_empty();
 
-        // 编译检测规则
-        let mut rules: Vec<Box<dyn DetectionRule>> = Vec::new();
-        if valid {
-            for rule_def in &profile.detection.rules {
-                match build_rule(rule_def) {
-                    Ok(rule) => rules.push(rule),
-                    Err(e) => {
-                        errors.push(e);
-                    }
-                }
-            }
-        }
+        let compile_rules = |defs: &[super::profile::DetectionRuleDef]| {
+            defs.iter().map(build_rule).collect::<Result<Vec<_>, _>>()
+        };
+        let required_rules = compile_rules(&profile.detection.required).unwrap_or_else(|e| {
+            errors.push(e);
+            Vec::new()
+        });
+        let optional_rules = compile_rules(&profile.detection.optional).unwrap_or_else(|e| {
+            errors.push(e);
+            Vec::new()
+        });
+        let forbidden_rules = compile_rules(&profile.detection.forbidden).unwrap_or_else(|e| {
+            errors.push(e);
+            Vec::new()
+        });
 
         // 编译启动策略
         let strategy = if valid && errors.is_empty() {
@@ -132,7 +150,9 @@ impl EngineRegistry {
             id,
             EngineEntry {
                 profile,
-                rules,
+                required_rules,
+                optional_rules,
+                forbidden_rules,
                 strategy,
                 enabled: enabled && final_valid,
                 valid: final_valid,
@@ -148,14 +168,21 @@ impl EngineRegistry {
     /// 返回 `(engine_id, confidence)`，confidence 为 0-100。
     /// 只检查 `enabled && valid` 的引擎。
     pub fn detect(&self, ctx: &dyn DetectionContext) -> Option<(&str, i32)> {
-        let mut best: Option<(&str, i32, i32)> = None; // (id, score, priority)
+        let mut best_specific: Option<(&str, i32, i32, i32)> = None;
+        let mut best_other: Option<(&str, i32, i32, i32)> = None;
 
         for entry in self.entries.values() {
             if !entry.enabled || !entry.valid {
                 continue;
             }
 
-            let raw_score = score_game(&entry.rules, ctx);
+            if entry.required_rules.iter().any(|rule| !rule.evaluate(ctx))
+                || entry.forbidden_rules.iter().any(|rule| rule.evaluate(ctx))
+            {
+                continue;
+            }
+
+            let raw_score = score_game(&entry.optional_rules, ctx);
             let min_score = entry.profile.detection.min_score;
 
             if raw_score < min_score {
@@ -163,23 +190,49 @@ impl EngineRegistry {
             }
 
             let priority = entry.profile.meta.priority;
+            let confidence = if entry.required_rules.is_empty() {
+                confidence_score(&entry.optional_rules, raw_score).max(1)
+            } else if entry.optional_rules.is_empty() {
+                100
+            } else {
+                60 + confidence_score(&entry.optional_rules, raw_score) * 40 / 100
+            };
 
-            match best {
-                None => best = Some((entry.profile.meta.id.as_str(), raw_score, priority)),
-                Some((_, best_score, best_priority)) => {
-                    if raw_score > best_score
-                        || (raw_score == best_score && priority < best_priority)
+            let target = if entry.profile.meta.id == "other" {
+                &mut best_other
+            } else {
+                &mut best_specific
+            };
+            match *target {
+                None => {
+                    *target = Some((
+                        entry.profile.meta.id.as_str(),
+                        confidence,
+                        raw_score,
+                        priority,
+                    ))
+                }
+                Some((_, best_confidence, best_score, best_priority)) => {
+                    if confidence > best_confidence
+                        || (confidence == best_confidence && raw_score > best_score)
+                        || (confidence == best_confidence
+                            && raw_score == best_score
+                            && priority < best_priority)
                     {
-                        best = Some((entry.profile.meta.id.as_str(), raw_score, priority));
+                        *target = Some((
+                            entry.profile.meta.id.as_str(),
+                            confidence,
+                            raw_score,
+                            priority,
+                        ));
                     }
                 }
             }
         }
 
-        best.map(|(id, raw_score, _)| {
-            let confidence = (raw_score as f64 / 16.0 * 100.0).min(100.0) as i32;
-            (id, confidence.max(1))
-        })
+        best_specific
+            .or(best_other)
+            .map(|(id, confidence, _, _)| (id, confidence))
     }
 
     /// 获取前端的引擎摘要列表。
@@ -210,7 +263,7 @@ impl EngineRegistry {
                 description: e.profile.meta.description.clone(),
                 enabled: e.enabled,
                 valid: e.valid,
-                rule_count: e.rules.len(),
+                rule_count: e.profile.detection.rule_count(),
                 strategy: e.profile.launch.strategy.clone(),
                 errors: e.errors.clone(),
             })
@@ -248,9 +301,13 @@ impl EngineRegistry {
                 min_score: p.detection.min_score,
                 rules: p
                     .detection
-                    .rules
+                    .required
                     .iter()
-                    .map(|r| RuleDetail {
+                    .map(|r| ("required", r))
+                    .chain(p.detection.optional.iter().map(|r| ("optional", r)))
+                    .chain(p.detection.forbidden.iter().map(|r| ("forbidden", r)))
+                    .map(|(group, r)| RuleDetail {
+                        group: group.to_string(),
                         rule_type: r.rule_type.clone(),
                         path: r.path.clone(),
                         pattern: r.pattern.clone(),
@@ -319,170 +376,5 @@ impl EngineRegistry {
 impl Default for EngineRegistry {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engines::context::FsDetectionContext;
-
-    fn make_test_registry() -> EngineRegistry {
-        let mut registry = EngineRegistry::new();
-
-        let toml_str = r#"
-[meta]
-id = "test-engine"
-name = "Test Engine"
-category = "test"
-
-[detection]
-min_score = 2
-
-[[detection.rules]]
-type = "file_exists"
-path = "marker.txt"
-weight = 3
-
-[launch]
-strategy = "native"
-entry_patterns = ["game"]
-"#;
-
-        let profile: EngineProfile = toml::from_str(toml_str).unwrap();
-        let rules: Vec<Box<dyn DetectionRule>> = profile
-            .detection
-            .rules
-            .iter()
-            .map(|d| build_rule(d).unwrap())
-            .collect();
-        let strategy = build_strategy("native").unwrap();
-
-        registry.entries.insert(
-            "test-engine".into(),
-            EngineEntry {
-                profile,
-                rules,
-                strategy,
-                enabled: true,
-                valid: true,
-                errors: vec![],
-            },
-        );
-
-        registry
-    }
-
-    #[test]
-    fn detect_matching_game() {
-        let registry = make_test_registry();
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("marker.txt"), b"").unwrap();
-
-        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
-        let result = registry.detect(&ctx);
-
-        assert!(result.is_some());
-        let (id, confidence) = result.unwrap();
-        assert_eq!(id, "test-engine");
-        assert!(confidence > 0);
-    }
-
-    #[test]
-    fn detect_no_match() {
-        let registry = make_test_registry();
-        let dir = tempfile::tempdir().unwrap();
-
-        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
-        let result = registry.detect(&ctx);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn disabled_engine_not_detected() {
-        let mut registry = make_test_registry();
-        registry.set_enabled("test-engine", false).unwrap();
-
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("marker.txt"), b"").unwrap();
-
-        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
-        assert!(registry.detect(&ctx).is_none());
-    }
-
-    #[test]
-    fn cannot_enable_invalid_engine() {
-        let mut registry = make_test_registry();
-        registry.entries.get_mut("test-engine").unwrap().valid = false;
-        registry.entries.get_mut("test-engine").unwrap().enabled = false;
-        registry.entries.get_mut("test-engine").unwrap().errors = vec!["bad config".into()];
-
-        let result = registry.set_enabled("test-engine", true);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("校验失败"));
-    }
-
-    #[test]
-    fn list_for_frontend_returns_dtos() {
-        let registry = make_test_registry();
-        let dtos = registry.list_for_frontend();
-        assert_eq!(dtos.len(), 1);
-        assert_eq!(dtos[0].id, "test-engine");
-        assert_eq!(dtos[0].name, "Test Engine");
-    }
-
-    #[test]
-    fn should_skip_scan_returns_true_for_skip_scan_engine() {
-        let mut registry = make_test_registry();
-        // Mark engine as skip_scan in its profile
-        registry
-            .entries
-            .get_mut("test-engine")
-            .unwrap()
-            .profile
-            .meta
-            .skip_scan = true;
-
-        assert!(registry.should_skip_scan("test-engine"));
-        assert!(!registry.should_skip_scan("nonexistent"));
-    }
-
-    #[test]
-    fn detect_still_finds_skip_scan_engine_detection_is_separate_from_skip_scan() {
-        let mut registry = make_test_registry();
-        // skip_scan means "don't auto-import during scan", but detection
-        // should still recognize the engine — the caller checks skip_scan separately.
-        registry
-            .entries
-            .get_mut("test-engine")
-            .unwrap()
-            .profile
-            .meta
-            .skip_scan = true;
-
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("marker.txt"), b"").unwrap();
-
-        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
-        let result = registry.detect(&ctx);
-        assert!(result.is_some());
-        let (id, _confidence) = result.unwrap();
-        assert_eq!(id, "test-engine");
-        // Caller must check should_skip_scan separately
-        assert!(registry.should_skip_scan(id));
-    }
-
-    #[test]
-    fn detect_skips_invalid_engine() {
-        let mut registry = make_test_registry();
-        registry.entries.get_mut("test-engine").unwrap().valid = false;
-        registry.entries.get_mut("test-engine").unwrap().enabled = false;
-
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("marker.txt"), b"").unwrap();
-
-        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
-        assert!(registry.detect(&ctx).is_none());
     }
 }

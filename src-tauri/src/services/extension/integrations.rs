@@ -5,22 +5,29 @@ use crate::models::{
     Capabilities, IntegrationOptions, IntegrationSettingsInput, IntegrationStatus,
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED,
 };
+use std::sync::Arc;
 use tauri::State;
+use tokio::sync::Mutex;
 
 // ── Service helpers ──────────────────────────────────────────
 
 pub async fn get_bottles_integration_status(
-    db: &mut toasty::Db,
+    db: Arc<Mutex<toasty::Db>>,
 ) -> Result<IntegrationStatus, String> {
     #[cfg(target_os = "linux")]
     {
-        let default_bottle = crate::db::get_setting(db, SETTING_BOTTLES_DEFAULT)
-            .await?
-            .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
-        let enabled_setting = crate::db::get_setting(db, SETTING_BOTTLES_ENABLED)
-            .await?
-            .map(|v| v == "1")
-            .unwrap_or(false);
+        // 只在读取配置时持有数据库锁，不能跨越 Bottles CLI 探测。
+        let (default_bottle, enabled_setting) = {
+            let mut db_lock = db.lock().await;
+            let default_bottle = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_DEFAULT)
+                .await?
+                .and_then(|v| if v.trim().is_empty() { None } else { Some(v) });
+            let enabled_setting = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED)
+                .await?
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            (default_bottle, enabled_setting)
+        };
 
         let cli = BottlesService::detect_cli().await;
         let installed = cli.is_some();
@@ -93,8 +100,7 @@ pub async fn set_bottles_integration_settings(
 #[tauri::command]
 pub async fn get_capabilities(state: State<'_, SettingsState>) -> Result<Capabilities, String> {
     let mut integrations = Vec::new();
-    let mut db_lock = state.db.lock().await;
-    integrations.push(get_bottles_integration_status(&mut *db_lock).await?);
+    integrations.push(get_bottles_integration_status(state.db.clone()).await?);
     Ok(Capabilities { integrations })
 }
 
@@ -104,9 +110,8 @@ pub async fn get_integration_status(
     key: String,
     state: State<'_, SettingsState>,
 ) -> Result<IntegrationStatus, String> {
-    let mut db_lock = state.db.lock().await;
     match key.as_str() {
-        "bottles" => get_bottles_integration_status(&mut *db_lock).await,
+        "bottles" => get_bottles_integration_status(state.db.clone()).await,
         _ => Err("未知集成".to_string()),
     }
 }

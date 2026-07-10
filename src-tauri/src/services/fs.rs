@@ -379,7 +379,10 @@ impl FileService {
     }
 
     /// 读取游戏配置
-    pub fn read_game_config(&self, config_path: &Path) -> Result<crate::models::GameConfig, String> {
+    pub fn read_game_config(
+        &self,
+        config_path: &Path,
+    ) -> Result<crate::models::GameConfig, String> {
         let content =
             std::fs::read_to_string(config_path).map_err(|e| format!("读取配置文件失败: {}", e))?;
 

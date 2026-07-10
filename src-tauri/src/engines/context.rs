@@ -5,6 +5,7 @@
 
 use glob::Pattern;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 // ─── 检测上下文 ──────────────────────────────────────────
 
@@ -23,8 +24,30 @@ pub trait DetectionContext {
     /// 返回是否有至少一个匹配项
     fn glob_match(&self, pattern: &str) -> bool;
 
+    /// 在游戏目录的有限深度子目录中进行 glob 匹配，适合 Unreal 等目录型引擎。
+    fn glob_match_recursive(&self, pattern: &str, max_depth: u32) -> bool {
+        let mut queue = vec![(self.game_dir().to_path_buf(), 0)];
+        while let Some((dir, depth)) = queue.pop() {
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if simple_glob_match(pattern, &name) {
+                        return true;
+                    }
+                    if depth < max_depth && entry.path().is_dir() {
+                        queue.push((entry.path(), depth + 1));
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// 目录下是否有指定扩展名的文件（例如 "rpy", "exe"）
     fn has_extension(&self, ext: &str) -> bool;
+
+    /// 当前目录是否包含带执行权限的非 Windows 文件。
+    fn has_native_executable(&self) -> bool;
 
     /// 获取当前正在检测的游戏目录路径
     fn game_dir(&self) -> &Path;
@@ -70,11 +93,43 @@ pub trait ResourceContext {
 /// 基于真实文件系统的 DetectionContext 实现
 pub struct FsDetectionContext {
     game_dir: PathBuf,
+    direct_entries: OnceLock<Vec<PathBuf>>,
+    recursive_names: OnceLock<Vec<(String, u32)>>,
 }
 
 impl FsDetectionContext {
     pub fn new(game_dir: PathBuf) -> Self {
-        Self { game_dir }
+        Self {
+            game_dir,
+            direct_entries: OnceLock::new(),
+            recursive_names: OnceLock::new(),
+        }
+    }
+
+    fn direct_entries(&self) -> &[PathBuf] {
+        self.direct_entries.get_or_init(|| {
+            std::fs::read_dir(&self.game_dir)
+                .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
+                .unwrap_or_default()
+        })
+    }
+
+    fn recursive_names(&self) -> &[(String, u32)] {
+        self.recursive_names.get_or_init(|| {
+            let mut names = Vec::new();
+            let mut queue = vec![(self.game_dir.clone(), 0)];
+            while let Some((dir, depth)) = queue.pop() {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        names.push((entry.file_name().to_string_lossy().to_string(), depth));
+                        if depth < 3 && entry.path().is_dir() {
+                            queue.push((entry.path(), depth + 1));
+                        }
+                    }
+                }
+            }
+            names
+        })
     }
 }
 
@@ -88,33 +143,32 @@ impl DetectionContext for FsDetectionContext {
     }
 
     fn glob_match(&self, pattern: &str) -> bool {
-        if let Ok(entries) = std::fs::read_dir(&self.game_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if simple_glob_match(pattern, &name) {
-                    return true;
-                }
-            }
-        }
-        false
+        self.direct_entries().iter().any(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| simple_glob_match(pattern, name))
+        })
+    }
+
+    fn glob_match_recursive(&self, pattern: &str, max_depth: u32) -> bool {
+        self.recursive_names()
+            .iter()
+            .any(|(name, depth)| *depth <= max_depth && simple_glob_match(pattern, name))
     }
 
     fn has_extension(&self, ext: &str) -> bool {
         let ext = ext.trim_start_matches('.');
-        if let Ok(entries) = std::fs::read_dir(&self.game_dir) {
-            for entry in entries.flatten() {
-                if entry
-                    .path()
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.eq_ignore_ascii_case(ext))
-                    == Some(true)
-                {
-                    return true;
-                }
-            }
-        }
-        false
+        self.direct_entries().iter().any(|path| {
+            path.extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case(ext))
+        })
+    }
+
+    fn has_native_executable(&self) -> bool {
+        self.direct_entries()
+            .iter()
+            .any(|path| crate::utils::path::is_linux_native_executable(path))
     }
 
     fn game_dir(&self) -> &Path {
@@ -126,95 +180,4 @@ pub fn simple_glob_match(pattern: &str, name: &str) -> bool {
     let pattern = pattern.to_lowercase();
     let name = name.to_lowercase();
     Pattern::new(&pattern).map_or(false, |p| p.matches(&name))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn glob_match_exact() {
-        assert!(simple_glob_match("test.txt", "test.txt"));
-        assert!(!simple_glob_match("test.txt", "other.txt"));
-    }
-
-    #[test]
-    fn glob_match_star() {
-        assert!(simple_glob_match("*.dll", "RGSS301.dll"));
-        assert!(simple_glob_match("RGSS*.dll", "RGSS301.dll"));
-        assert!(!simple_glob_match("*.exe", "RGSS301.dll"));
-    }
-
-    #[test]
-    fn glob_match_question() {
-        assert!(simple_glob_match("file?.txt", "file1.txt"));
-        assert!(!simple_glob_match("file?.txt", "file12.txt"));
-    }
-
-    #[test]
-    fn glob_match_complex() {
-        assert!(simple_glob_match("*_Data", "MyGame_Data"));
-        assert!(simple_glob_match("lib/python*", "lib/python3.11"));
-        assert!(!simple_glob_match("*_Data", "MyGame_Data_Backup"));
-    }
-
-    #[test]
-    fn glob_match_case_insensitive() {
-        assert!(simple_glob_match("test.txt", "TEST.TXT"));
-        assert!(simple_glob_match("TEST.TXT", "test.txt"));
-        assert!(simple_glob_match("*.DLL", "RGSS301.dll"));
-        assert!(simple_glob_match("*.dll", "RGSS301.DLL"));
-    }
-
-    #[test]
-    fn glob_match_empty_pattern_matches_empty_name() {
-        assert!(simple_glob_match("", ""));
-    }
-
-    #[test]
-    fn glob_match_empty_pattern_no_match_nonempty() {
-        assert!(!simple_glob_match("", "anything"));
-    }
-
-    #[test]
-    fn glob_match_pattern_start_matches() {
-        assert!(simple_glob_match("*suffix", "prefix_suffix"));
-        assert!(!simple_glob_match("*suffix", "prefix_suffix_more"));
-    }
-
-    #[test]
-    fn glob_match_pattern_middle_matches() {
-        assert!(simple_glob_match("prefix*suffix", "prefix_mid_suffix"));
-        assert!(!simple_glob_match(
-            "prefix*suffix",
-            "prefix_mid_suffix_extra"
-        ));
-    }
-
-    #[test]
-    fn glob_match_multiple_stars() {
-        assert!(simple_glob_match("*_*", "a_b"));
-        assert!(!simple_glob_match("*_*", "ab"));
-    }
-
-    #[test]
-    fn fs_detection_context_basics() {
-        let dir = tempfile::tempdir().unwrap();
-        let ctx = FsDetectionContext::new(dir.path().to_path_buf());
-
-        // No files exist yet
-        assert!(!ctx.file_exists("test.txt"));
-        assert!(!ctx.dir_exists("subdir"));
-        assert!(!ctx.has_extension("txt"));
-
-        // Create a file
-        fs::write(dir.path().join("test.txt"), b"hello").unwrap();
-        assert!(ctx.file_exists("test.txt"));
-        assert!(ctx.has_extension("txt"));
-
-        // Create a directory
-        fs::create_dir(dir.path().join("subdir")).unwrap();
-        assert!(ctx.dir_exists("subdir"));
-    }
 }

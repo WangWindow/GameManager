@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 /// 游戏管理服务
+#[derive(Clone)]
 pub struct GameService {
     db: Arc<Mutex<toasty::Db>>,
 }
@@ -226,6 +227,22 @@ impl GameService {
             .map_err(|e| format!("删除游戏失败: {}", e))?;
 
         Ok(())
+    }
+
+    /// 清空游戏库记录，不删除实际游戏文件或容器目录。
+    pub async fn delete_all_games(&self) -> Result<u32, String> {
+        let mut db = self.db.lock().await;
+        let games = Game::all()
+            .exec(&mut *db)
+            .await
+            .map_err(|e| format!("查询游戏列表失败: {}", e))?;
+        let count = games.len() as u32;
+        for game in games {
+            Game::delete_by_id(&mut *db, &game.id)
+                .await
+                .map_err(|e| format!("清空游戏库失败: {}", e))?;
+        }
+        Ok(count)
     }
 
     /// 更新游戏最后游玩时间

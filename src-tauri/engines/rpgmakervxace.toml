@@ -6,30 +6,29 @@ icon = "ri:window-line"
 priority = 3
 
 [detection]
-min_score = 5
+min_score = 3
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "Game.exe"
 weight = 2
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "Game"
 weight = 2
 
-[[detection.rules]]
+[[detection.optional]]
 type = "glob_match"
 pattern = "RGSS3*.dll"
 weight = 3
 
-[[detection.rules]]
+[[detection.required]]
 type = "file_exists"
 path = "Game.ini"
-weight = 1
 
 [launch]
-strategy = "native"
-entry_patterns = ["Game.exe", "Game"]
+strategy = "bottles"
+entry_patterns = ["@native", "Game.exe"]
 args = []
 sandbox_home = true

@@ -3,6 +3,7 @@ import { Icon } from "@iconify/react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -28,6 +29,7 @@ interface ManagementDialogProps {
   onCleanupContainers?: () => void;
   onUpdateEngine?: (engine: EngineDto) => void;
   onRemoveEngine?: (engine: EngineDto) => void;
+  onRemoveAllGames?: () => Promise<void>;
 }
 
 export default function ManagementDialog({
@@ -38,6 +40,7 @@ export default function ManagementDialog({
   onCleanupContainers,
   onUpdateEngine,
   onRemoveEngine,
+  onRemoveAllGames,
 }: ManagementDialogProps) {
   const { t } = useI18n();
   const [engines, setEngines] = useState<EngineDto[]>([]);
@@ -48,6 +51,8 @@ export default function ManagementDialog({
   const [bottlesEnabled, setBottlesEnabled] = useState(false);
   const [bottlesList, setBottlesList] = useState<string[]>([]);
   const [defaultBottle, setDefaultBottle] = useState("");
+  const [removeAllConfirmOpen, setRemoveAllConfirmOpen] = useState(false);
+  const [removingAllGames, setRemovingAllGames] = useState(false);
   const bottlesInstallCommand = 'flatpak install flathub com.usebottles.bottles';
 
   async function fetchEngines() {
@@ -112,6 +117,17 @@ export default function ManagementDialog({
     }
   }, [open]);
 
+  async function confirmRemoveAllGames() {
+    if (!onRemoveAllGames || removingAllGames) return;
+    setRemovingAllGames(true);
+    try {
+      await onRemoveAllGames();
+      setRemoveAllConfirmOpen(false);
+    } finally {
+      setRemovingAllGames(false);
+    }
+  }
+
   /** 简化布局行 */
   const FormRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div className="flex items-center justify-between gap-4">
@@ -121,6 +137,7 @@ export default function ManagementDialog({
   );
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -141,6 +158,10 @@ export default function ManagementDialog({
             <Button variant="outline" size="sm" onClick={onCleanupContainers}>
               <Icon icon="ri:folder-reduce-line" className="h-3.5 w-3.5 mr-1" />
               {t("maintenance.cleanupContainers")}
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => setRemoveAllConfirmOpen(true)}>
+              <Icon icon="ri:delete-bin-6-line" className="h-3.5 w-3.5 mr-1" />
+              {t("maintenance.removeAllGames")}
             </Button>
           </div>
 
@@ -239,5 +260,25 @@ export default function ManagementDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <Dialog open={removeAllConfirmOpen} onOpenChange={setRemoveAllConfirmOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("maintenance.removeAllGamesConfirmTitle")}</DialogTitle>
+          <DialogDescription>
+            {t("maintenance.removeAllGamesConfirmDescription")}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" disabled={removingAllGames} onClick={() => setRemoveAllConfirmOpen(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="destructive" disabled={removingAllGames} onClick={confirmRemoveAllGames}>
+            {removingAllGames && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin mr-1" />}
+            {t("maintenance.removeAllGamesConfirmAction")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -69,6 +69,7 @@ export interface DetectionDetail {
 }
 
 export interface RuleDetail {
+  group: "required" | "optional" | "forbidden" | string
   ruleType: string
   path: string
   pattern: string

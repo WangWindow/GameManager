@@ -123,6 +123,15 @@ pub async fn delete_game(id: String, state: State<'_, AppState>) -> Result<(), S
     Ok(())
 }
 
+/// 移除游戏库中的全部条目，不删除实际游戏文件。
+#[tauri::command]
+pub async fn remove_all_games(state: State<'_, AppState>) -> Result<u32, String> {
+    let service = state.game_service.lock().await;
+    let removed = service.delete_all_games().await?;
+    state.config_cache.lock().unwrap().clear();
+    Ok(removed)
+}
+
 /// 获取游戏 profile 目录路径
 #[tauri::command]
 pub async fn get_game_profile_dir(
@@ -174,6 +183,7 @@ pub(crate) fn default_game_config(game: &Game) -> GameConfig {
         engine_type: normalize_engine_type(game),
         entry_path: String::new(),
         runtime_version: game.runtime_version.clone(),
+        runner: "auto".to_string(),
         args: Vec::new(),
         sandbox_home: true,
         use_bottles: false,
@@ -212,4 +222,10 @@ pub(crate) fn normalize_path(path: &Path) -> String {
     crate::utils::path::canonicalize(path)
         .to_string_lossy()
         .to_string()
+}
+
+/// 判断入口是否应作为 Linux 原生程序或可执行脚本启动。
+/// Windows `.exe` 即使位于将所有文件标记为可执行的挂载盘，也不视为原生程序。
+pub(crate) fn is_linux_native_entry(path: &Path) -> bool {
+    crate::utils::path::is_linux_native_executable(path)
 }

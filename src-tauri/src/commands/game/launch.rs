@@ -1,4 +1,4 @@
-use super::game::normalize_path;
+use super::game::{default_game_config, is_linux_native_entry, normalize_path};
 use crate::commands::state::AppState;
 use crate::models::{EngineType, LaunchResult, SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED};
 use crate::services::FileService;
@@ -22,12 +22,25 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
     drop(game_service);
 
     let container_path = state.container_root_path().await;
+    let file_service = FileService::new();
+    let config_path = file_service.game_config_path(&container_path, &game.profile_key);
+    let mut config = if config_path.exists() {
+        Some(file_service.read_game_config(&config_path)?)
+    } else {
+        Some(default_game_config(&game))
+    };
 
     // 获取 NW.js 运行时（MV/MZ 及所有 nwjs 策略的引擎，如 HTML）
     let engine_type = EngineType::from_str(&game.engine_type);
     let needs_nwjs = {
         let registry = state.engine_registry.lock().await;
-        if let Some(entry) = registry.get_entry(&game.engine_type) {
+        if config.as_ref().map(|c| c.runner.as_str()) == Some("nwjs") {
+            true
+        } else if config.as_ref().map(|c| c.runner.as_str()) == Some("native")
+            || config.as_ref().map(|c| c.runner.as_str()) == Some("bottles")
+        {
+            false
+        } else if let Some(entry) = registry.get_entry(&game.engine_type) {
             entry.profile.launch.strategy == "nwjs"
         } else {
             matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
@@ -48,14 +61,6 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
     if needs_nwjs && nwjs_runtime_dir.is_none() {
         return Err("未安装 NW.js 运行时，请先下载并安装".to_string());
     }
-
-    let file_service = FileService::new();
-    let config_path = file_service.game_config_path(&container_path, &game.profile_key);
-    let mut config = if config_path.exists() {
-        Some(file_service.read_game_config(&config_path)?)
-    } else {
-        None
-    };
 
     if let Some(cfg) = config.as_mut() {
         if cfg.entry_path.trim().is_empty() {
@@ -92,6 +97,27 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
             }
         }
 
+        if cfg.runner == "auto" {
+            let configured_entry = PathBuf::from(&cfg.entry_path);
+            let entry = if configured_entry.is_absolute() {
+                configured_entry
+            } else {
+                Path::new(&game.game_path).join(configured_entry)
+            };
+            if is_linux_native_entry(&entry) {
+                cfg.runner = "native".to_string();
+                cfg.sandbox_home = true;
+            } else {
+                let registry = state.engine_registry.lock().await;
+                if let Some(engine) = registry.get_entry(&game.engine_type) {
+                    cfg.runner = engine.profile.launch.strategy.clone();
+                    cfg.sandbox_home = engine.profile.launch.sandbox_home;
+                } else {
+                    cfg.runner = "bottles".to_string();
+                }
+            }
+        }
+
         let mut db_lock = state.db.lock().await;
         // 非 Windows .exe 不需要 Bottles（Linux 原生应用）
         if !cfg.entry_path.to_lowercase().ends_with(".exe") {
@@ -103,6 +129,9 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
                 .map(|v| v == "1")
                 .unwrap_or(false);
             if !enabled {
+                if cfg.runner == "bottles" {
+                    return Err("当前游戏指定使用 Bottles，但 Bottles 集成未启用".to_string());
+                }
                 cfg.use_bottles = false;
                 cfg.bottle_name = None;
             } else if cfg.use_bottles && cfg.bottle_name.as_deref().unwrap_or("").is_empty() {

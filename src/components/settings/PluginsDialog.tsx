@@ -150,9 +150,10 @@ export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps
                               <div className="mt-1 space-y-0.5">
                                 {detail.detection.rules.map((r, i) => (
                                   <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                                    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px]">{r.group}</span>
                                     <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px]">{r.ruleType}</span>
                                     <span className="truncate">{r.path || r.pattern || r.ext}</span>
-                                    <span className="shrink-0 ml-auto">×{r.weight}</span>
+                                    {r.group === "optional" && <span className="shrink-0 ml-auto">+{r.weight}</span>}
                                   </div>
                                 ))}
                               </div>

@@ -8,6 +8,7 @@ import {
   getEngineUpdateInfo,
   getNwjsStableInfo,
   updateEngine,
+  removeAllGames,
 } from "@/lib/api";
 import { translate } from "@/i18n";
 import type { EngineDto } from "@/types";
@@ -94,6 +95,22 @@ export function useMaintenanceActions(options: Options) {
     }
   }
 
+  async function handleRemoveAllGames() {
+    if (maintenanceLoading) return;
+    setMaintenanceLoading(true);
+    try {
+      const count = await removeAllGames();
+      toast.success(translate("maintenance.toastRemoveAllGamesDone", { count }));
+      window.dispatchEvent(new CustomEvent("gm:refresh-games"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : translate("maintenance.toastRemoveAllGamesFailed");
+      toast.error(msg);
+      throw e;
+    } finally {
+      setMaintenanceLoading(false);
+    }
+  }
+
   return {
     maintenanceLoading,
     handleDownloadNwjs,
@@ -101,5 +118,6 @@ export function useMaintenanceActions(options: Options) {
     handleCleanupOldNwjs,
     handleUpdateEngine,
     handleRemoveEngine,
+    handleRemoveAllGames,
   };
 }

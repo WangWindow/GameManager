@@ -9,6 +9,7 @@ pub struct LauncherService {
 }
 
 struct LaunchOptions {
+    runner: String,
     entry_path: Option<String>,
     args: Vec<String>,
     sandbox_home: bool,
@@ -47,8 +48,10 @@ impl LauncherService {
         // 根据引擎类型启动游戏
         let engine_type = EngineType::from_str(&game.engine_type);
         let use_nwjs = nwjs_runtime_dir.is_some()
-            && (matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
-                || matches!(engine_type, EngineType::Html | EngineType::Other));
+            && (options.runner == "nwjs"
+                || (options.runner == "auto"
+                    && (matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
+                        || matches!(engine_type, EngineType::Html))));
 
         let child = if use_nwjs {
             self.launch_nwjs_game(game, game_path, container_root, nwjs_runtime_dir, &options)
@@ -293,6 +296,7 @@ impl LauncherService {
         if let Some(config) = config {
             let entry_path = config.entry_path.trim();
             LaunchOptions {
+                runner: config.runner.clone(),
                 entry_path: if entry_path.is_empty() {
                     None
                 } else {
@@ -300,11 +304,12 @@ impl LauncherService {
                 },
                 args: config.args.clone(),
                 sandbox_home: config.sandbox_home,
-                use_bottles: config.use_bottles,
+                use_bottles: config.use_bottles || config.runner == "bottles",
                 bottle_name: config.bottle_name.clone(),
             }
         } else {
             LaunchOptions {
+                runner: "auto".to_string(),
                 entry_path: None,
                 args: Vec::new(),
                 sandbox_home: true,

@@ -101,6 +101,7 @@ export default function App() {
     handleCleanupOldNwjs,
     handleUpdateEngine,
     handleRemoveEngine,
+    handleRemoveAllGames,
   } = useMaintenanceActions({ updateTask });
 
   // 引擎筛选选项（按分类分组，标签显示分类名而非引擎名）
@@ -256,6 +257,7 @@ export default function App() {
         onCleanupContainers={handleCleanupContainers}
         onUpdateEngine={handleUpdateEngine}
         onRemoveEngine={handleRemoveEngine}
+        onRemoveAllGames={handleRemoveAllGames}
       />
 
       <PluginsDialog

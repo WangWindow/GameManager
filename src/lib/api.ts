@@ -75,6 +75,11 @@ export async function deleteGame(id: string): Promise<void> {
   return invoke<void>('delete_game', { id })
 }
 
+/** 移除游戏库中的全部条目，不删除实际游戏文件。 */
+export async function removeAllGames(): Promise<number> {
+  return invoke<number>('remove_all_games')
+}
+
 /**
  * 启动游戏
  */

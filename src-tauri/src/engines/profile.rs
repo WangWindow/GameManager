@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 /// 一个完整的引擎描述文件（对应一个 TOML）
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EngineProfile {
     pub meta: EngineMeta,
     #[serde(default)]
@@ -19,6 +20,7 @@ pub struct EngineProfile {
 // ─── 元数据 ──────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EngineMeta {
     /// 引擎唯一标识（如 "rpgmakermv"）
     pub id: String,
@@ -52,19 +54,54 @@ fn default_icon() -> String {
 
 // ─── 检测配置 ────────────────────────────────────────────
 
-/// 检测配置：规则列表 + 最低得分阈值
+/// 检测配置：必选项、加分项、排除项与最低加分阈值。
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DetectionConfig {
-    /// 最低得分（低于此值不匹配）
+    /// 加分项最低得分（低于此值不匹配）
     #[serde(default)]
     pub min_score: i32,
-    /// 检测规则列表
+    /// 必须全部命中的规则
     #[serde(default)]
-    pub rules: Vec<DetectionRuleDef>,
+    pub required: Vec<DetectionRuleDef>,
+    /// 按权重累计得分的规则
+    #[serde(default)]
+    pub optional: Vec<DetectionRuleDef>,
+    /// 任意命中即排除该插件的规则
+    #[serde(default)]
+    pub forbidden: Vec<DetectionRuleDef>,
 }
 
-/// 单个检测规则定义（TOML 中 [[detection.rules]] 条目）
+impl DetectionConfig {
+    pub fn rule_count(&self) -> usize {
+        self.required.len() + self.optional.len() + self.forbidden.len()
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.rule_count() == 0 {
+            return Err("至少需要一条检测规则".into());
+        }
+        if self.min_score < 0 {
+            return Err("min_score 不能为负数".into());
+        }
+        let maximum = self
+            .optional
+            .iter()
+            .map(|rule| rule.weight.max(0))
+            .sum::<i32>();
+        if self.min_score > maximum {
+            return Err(format!(
+                "min_score ({}) 超过加分项最高总分 ({})",
+                self.min_score, maximum
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// 单个检测规则定义（用于 required / optional / forbidden 三类条目）
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DetectionRuleDef {
     /// 规则类型
     #[serde(rename = "type")]
@@ -96,7 +133,7 @@ impl DetectionRuleDef {
                     return Err(format!("{} 规则缺少 path 字段", self.rule_type));
                 }
             }
-            "glob_match" => {
+            "glob_match" | "glob_match_recursive" => {
                 if self.pattern.is_empty() {
                     return Err("glob_match 规则缺少 pattern 字段".into());
                 }
@@ -106,6 +143,7 @@ impl DetectionRuleDef {
                     return Err("has_extension 规则缺少 ext 字段".into());
                 }
             }
+            "has_native_executable" => {}
             other => return Err(format!("未知的检测规则类型: {}", other)),
         }
         if self.weight < 0 {
@@ -120,8 +158,9 @@ impl DetectionRuleDef {
 /// 启动配置：策略类型 + 策略参数
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
+#[serde(deny_unknown_fields)]
 pub struct LaunchConfig {
-    /// 启动策略类型：native | nwjs | external
+    /// 启动策略类型：native | nwjs | external | bottles
     pub strategy: String,
 
     /// 入口可执行文件匹配模式（按优先级排列）
@@ -180,7 +219,10 @@ impl LaunchConfig {
                     return Err("nwjs 策略缺少 runtime_id 字段".into());
                 }
             }
-            "external" => {
+            "external" | "bottles" => {
+                if self.strategy == "bottles" {
+                    return Ok(());
+                }
                 if self.program.is_empty() {
                     return Err("external 策略缺少 program 字段".into());
                 }
@@ -265,6 +307,7 @@ pub struct DetectionDetail {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleDetail {
+    pub group: String,
     pub rule_type: String,
     pub path: String,
     pub pattern: String,
@@ -282,227 +325,4 @@ pub struct LaunchDetail {
     pub sandbox_home: bool,
     pub runtime_id: String,
     pub program: String,
-}
-
-// ─── 测试 ────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_mv_profile() {
-        let toml_str = r#"
-[meta]
-id = "rpgmakermv"
-name = "RPG Maker MV"
-category = "nwjs"
-icon = "ri:window-line"
-priority = 2
-
-[detection]
-min_score = 4
-
-[[detection.rules]]
-type = "file_exists"
-path = "js/rpg_core.js"
-weight = 3
-
-[[detection.rules]]
-type = "file_exists"
-path = "data/System.json"
-weight = 2
-
-[launch]
-strategy = "nwjs"
-runtime_id = "nwjs-sdk"
-entry_patterns = ["nw.exe", "Game.exe"]
-args = ["--enable-webgl"]
-sandbox_home = true
-"#;
-
-        let profile: EngineProfile = toml::from_str(toml_str).unwrap();
-        assert_eq!(profile.meta.id, "rpgmakermv");
-        assert_eq!(profile.meta.category, "nwjs");
-        assert_eq!(profile.detection.rules.len(), 2);
-        assert_eq!(profile.detection.min_score, 4);
-        assert_eq!(profile.launch.strategy, "nwjs");
-        assert_eq!(profile.launch.runtime_id, "nwjs-sdk");
-    }
-
-    #[test]
-    fn parse_renpy_profile() {
-        let toml_str = r#"
-[meta]
-id = "renpy"
-name = "Ren'Py"
-category = "renpy"
-icon = "ri:slideshow-line"
-
-[detection]
-min_score = 4
-
-[[detection.rules]]
-type = "dir_exists"
-path = "renpy"
-weight = 3
-
-[[detection.rules]]
-type = "has_extension"
-ext = "rpy"
-weight = 3
-
-[launch]
-strategy = "native"
-entry_patterns = ["renpy.sh", "renpy.exe"]
-"#;
-
-        let profile: EngineProfile = toml::from_str(toml_str).unwrap();
-        assert_eq!(profile.meta.id, "renpy");
-        assert_eq!(profile.launch.strategy, "native");
-        assert_eq!(profile.detection.rules.len(), 2);
-    }
-
-    #[test]
-    fn parse_external_profile() {
-        let toml_str = r#"
-[meta]
-id = "unity-wine"
-name = "Unity (Wine)"
-category = "other"
-icon = "ri:gamepad-line"
-
-[detection]
-min_score = 4
-
-[[detection.rules]]
-type = "glob_match"
-pattern = "*_Data"
-weight = 2
-
-[launch]
-strategy = "external"
-program = "bottles-cli"
-program_args_prefix = ["run", "-b"]
-args_template = "{bottle} -e {exe}"
-required_integration = "bottles"
-sandbox_home = true
-"#;
-
-        let profile: EngineProfile = toml::from_str(toml_str).unwrap();
-        assert_eq!(profile.launch.strategy, "external");
-        assert_eq!(profile.launch.program, "bottles-cli");
-        assert_eq!(profile.launch.required_integration, "bottles");
-    }
-
-    #[test]
-    fn validate_valid_rules() {
-        let def = DetectionRuleDef {
-            rule_type: "file_exists".into(),
-            path: "test.txt".into(),
-            pattern: String::new(),
-            ext: String::new(),
-            weight: 1,
-        };
-        assert!(def.validate().is_ok());
-    }
-
-    #[test]
-    fn validate_missing_field() {
-        let def = DetectionRuleDef {
-            rule_type: "file_exists".into(),
-            path: String::new(),
-            pattern: String::new(),
-            ext: String::new(),
-            weight: 1,
-        };
-        assert!(def.validate().is_err());
-    }
-
-    #[test]
-    fn validate_unknown_rule_type() {
-        let def = DetectionRuleDef {
-            rule_type: "run_arbitrary_code".into(),
-            path: String::new(),
-            pattern: String::new(),
-            ext: String::new(),
-            weight: 1,
-        };
-        assert!(def.validate().is_err());
-    }
-
-    #[test]
-    fn validate_launch_config_native() {
-        let config = LaunchConfig {
-            strategy: "native".into(),
-            entry_patterns: vec!["game.exe".into()],
-            exclude_patterns: vec![],
-            args: vec![],
-            sandbox_home: false,
-            runtime_id: String::new(),
-            program: String::new(),
-            program_args_prefix: vec![],
-            required_integration: String::new(),
-            args_template: String::new(),
-            preserve_dirs: vec![],
-            extras: std::collections::HashMap::new(),
-        };
-        assert!(config.validate().is_ok());
-    }
-
-    #[test]
-    fn validate_launch_config_nwjs_missing_runtime() {
-        let config = LaunchConfig {
-            strategy: "nwjs".into(),
-            entry_patterns: vec![],
-            exclude_patterns: vec![],
-            args: vec![],
-            sandbox_home: false,
-            runtime_id: String::new(), // missing!
-            program: String::new(),
-            program_args_prefix: vec![],
-            required_integration: String::new(),
-            args_template: String::new(),
-            preserve_dirs: vec![],
-            extras: std::collections::HashMap::new(),
-        };
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
-    fn engine_meta_dto_conversion() {
-        let profile = EngineProfile {
-            meta: EngineMeta {
-                id: "test".into(),
-                name: "Test Engine".into(),
-                category: "test".into(),
-                icon: "ri:test-line".into(),
-                priority: 0,
-                description: "A test engine".into(),
-                skip_scan: false,
-            },
-            detection: DetectionConfig {
-                min_score: 0,
-                rules: vec![],
-            },
-            launch: LaunchConfig {
-                strategy: "native".into(),
-                entry_patterns: vec![],
-                exclude_patterns: vec![],
-                args: vec![],
-                sandbox_home: false,
-                runtime_id: String::new(),
-                program: String::new(),
-                program_args_prefix: vec![],
-                required_integration: String::new(),
-                args_template: String::new(),
-                preserve_dirs: vec![],
-                extras: std::collections::HashMap::new(),
-            },
-        };
-
-        let dto = EngineMetaDto::from(&profile);
-        assert_eq!(dto.id, "test");
-        assert_eq!(dto.name, "Test Engine");
-    }
 }

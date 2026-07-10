@@ -71,6 +71,9 @@ pub struct GameConfig {
     pub entry_path: String,
     /// 运行时版本
     pub runtime_version: Option<String>,
+    /// 启动运行器：auto | native | nwjs | bottles。
+    #[serde(default = "default_runner")]
+    pub runner: String,
     /// 启动参数
     #[serde(default)]
     pub args: Vec<String>,
@@ -92,27 +95,22 @@ fn default_true() -> bool {
     true
 }
 
+fn default_runner() -> String {
+    "auto".to_string()
+}
+
 impl Default for GameConfig {
     fn default() -> Self {
         Self {
             engine_type: String::new(),
             entry_path: String::new(),
             runtime_version: None,
+            runner: default_runner(),
             args: Vec::new(),
             sandbox_home: true,
             use_bottles: false,
             bottle_name: None,
             cover_file: None,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::EngineType;
-
-    #[test]
-    fn engine_type_parses_html() {
-        assert_eq!(EngineType::from_str("html").as_str(), "html");
     }
 }

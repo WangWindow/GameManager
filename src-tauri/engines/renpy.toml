@@ -6,45 +6,42 @@ icon = "ri:slideshow-line"
 priority = 0
 
 [detection]
-min_score = 4
+min_score = 0
 
-[[detection.rules]]
+[[detection.required]]
 type = "dir_exists"
 path = "renpy"
+
+[[detection.optional]]
+type = "has_native_executable"
 weight = 3
 
-[[detection.rules]]
-type = "file_exists"
-path = "renpy.sh"
-weight = 3
+[[detection.optional]]
+type = "has_extension"
+ext = "exe"
+weight = 2
 
-[[detection.rules]]
-type = "file_exists"
-path = "renpy.exe"
-weight = 3
-
-[[detection.rules]]
+[[detection.required]]
 type = "dir_exists"
 path = "game"
-weight = 1
 
-[[detection.rules]]
+[[detection.optional]]
 type = "has_extension"
 ext = "rpy"
 weight = 3
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "game/script.rpy"
 weight = 1
 
-[[detection.rules]]
+[[detection.optional]]
 type = "glob_match"
 pattern = "lib/python*"
 weight = 1
 
 [launch]
-strategy = "native"
-entry_patterns = ["renpy.sh", "renpy.exe"]
+strategy = "bottles"
+entry_patterns = ["@native", "*.sh", "*.exe"]
 args = []
 sandbox_home = true

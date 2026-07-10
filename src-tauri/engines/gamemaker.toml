@@ -1,0 +1,26 @@
+[meta]
+id = "gamemaker"
+name = "GameMaker"
+category = "other"
+icon = "ri:gamepad-line"
+priority = 7
+description = "GameMaker Studio 导出的游戏。"
+
+[detection]
+min_score = 0
+
+[[detection.required]]
+type = "file_exists"
+path = "data.win"
+
+[[detection.optional]]
+type = "file_exists"
+path = "options.ini"
+weight = 1
+
+[launch]
+strategy = "bottles"
+entry_patterns = ["*.exe", "runner"]
+exclude_patterns = ["unins*.exe"]
+args = []
+sandbox_home = false

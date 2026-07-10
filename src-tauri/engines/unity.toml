@@ -6,32 +6,34 @@ icon = "ri:gamepad-line"
 priority = 5
 
 [detection]
-min_score = 4
+min_score = 0
 
-[[detection.rules]]
+[[detection.required]]
 type = "file_exists"
 path = "UnityPlayer.dll"
-weight = 3
 
-[[detection.rules]]
+[[detection.required]]
 type = "glob_match"
 pattern = "*_Data"
-weight = 2
 
-[[detection.rules]]
+[[detection.forbidden]]
+type = "file_exists"
+path = "Unity.exe"
+
+[[detection.optional]]
 type = "dir_exists"
 path = "MonoBleedingEdge"
 weight = 1
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "GameAssembly.dll"
 weight = 1
 
 [launch]
-strategy = "native"
-entry_patterns = ["Game.exe", "*.exe"]
+strategy = "bottles"
+entry_patterns = ["@native", "*.exe"]
 exclude_patterns = ["UnityCrashHandler*.exe", "UnityCrashHandler*"]
 args = []
-sandbox_home = false
+sandbox_home = true
 preserve_dirs = ["Save", "Saves"]

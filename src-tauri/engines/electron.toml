@@ -1,0 +1,26 @@
+[meta]
+id = "electron"
+name = "Electron"
+category = "other"
+icon = "ri:electron-line"
+priority = 9
+description = "Electron 打包的桌面游戏。"
+
+[detection]
+min_score = 0
+
+[[detection.required]]
+type = "file_exists"
+path = "resources/app.asar"
+
+[[detection.optional]]
+type = "file_exists"
+path = "chrome_100_percent.pak"
+weight = 1
+
+[launch]
+strategy = "bottles"
+entry_patterns = ["*.exe"]
+exclude_patterns = ["crashpad_handler*.exe", "unins*.exe"]
+args = []
+sandbox_home = false

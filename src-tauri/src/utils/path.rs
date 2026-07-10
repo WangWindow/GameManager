@@ -15,3 +15,39 @@ pub fn ensure_dir(path: &Path) -> Result<(), String> {
 pub fn is_within(path: &Path, root: &Path) -> bool {
     canonicalize(path).starts_with(&canonicalize(root))
 }
+
+/// 判断文件是否为可直接启动的 Linux ELF 或带 shebang 的可执行脚本。
+pub fn is_linux_native_executable(path: &Path) -> bool {
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("exe"))
+    {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::io::Read;
+        use std::os::unix::fs::PermissionsExt;
+
+        let Ok(metadata) = path.metadata() else {
+            return false;
+        };
+        if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 {
+            return false;
+        }
+
+        let mut header = [0_u8; 4];
+        let Ok(mut file) = std::fs::File::open(path) else {
+            return false;
+        };
+        let Ok(read) = file.read(&mut header) else {
+            return false;
+        };
+        return (read >= 4 && header == *b"\x7fELF") || (read >= 2 && header[..2] == *b"#!");
+    }
+
+    #[cfg(not(unix))]
+    false
+}

@@ -1,5 +1,7 @@
 use super::cover::update_game_cover;
-use super::game::{default_game_config, is_nwjs_runtime_dir, normalize_path};
+use super::game::{
+    default_game_config, is_linux_native_entry, is_nwjs_runtime_dir, normalize_path,
+};
 use crate::commands::state::AppState;
 use crate::models::{AddGameInput, ImportGameInput, SETTING_BOTTLES_ENABLED};
 use crate::services::FileService;
@@ -53,13 +55,30 @@ pub async fn import_game_dir(
         return Err(e);
     }
     let mut config = default_game_config(&game);
-    let entry_patterns = {
+    let (entry_patterns, runner, sandbox_home) = {
         let registry = state.engine_registry.lock().await;
         registry
             .get_entry(&engine_type)
-            .map(|e| e.profile.launch.entry_patterns.clone())
-            .unwrap_or_default()
+            .map(|e| {
+                let runner = match e.profile.launch.strategy.as_str() {
+                    "nwjs" => "nwjs",
+                    "bottles" => "bottles",
+                    _ => "native",
+                };
+                (
+                    e.profile.launch.entry_patterns.clone(),
+                    runner.to_string(),
+                    e.profile.launch.sandbox_home,
+                )
+            })
+            .unwrap_or_else(|| (Vec::new(), "auto".to_string(), true))
     };
+    config.runner = runner;
+    config.sandbox_home = sandbox_home;
+    if is_linux_native_entry(exe_path) {
+        config.runner = "native".to_string();
+        config.sandbox_home = true;
+    }
     if entry_patterns.is_empty() {
         if game_dir.join("www").join("package.json").exists() {
             config.entry_path = "www".to_string();
@@ -74,7 +93,7 @@ pub async fn import_game_dir(
         let mut db_lock = state.db.lock().await;
         if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await
         {
-            config.use_bottles = val == "1" && executable_path.to_lowercase().ends_with(".exe");
+            config.use_bottles = val == "1" && config.runner == "bottles";
         }
     }
     let _ = file_service.write_game_config(&config_path, &config);

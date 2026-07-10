@@ -6,24 +6,22 @@ icon = "ri:window-line"
 priority = 2
 
 [detection]
-min_score = 4
+min_score = 0
 
-[[detection.rules]]
+[[detection.required]]
 type = "file_exists"
 path = "js/rpg_core.js"
-weight = 3
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "js/rpg_managers.js"
 weight = 3
 
-[[detection.rules]]
+[[detection.required]]
 type = "file_exists"
 path = "data/System.json"
-weight = 2
 
-[[detection.rules]]
+[[detection.optional]]
 type = "file_exists"
 path = "package.json"
 weight = 1
