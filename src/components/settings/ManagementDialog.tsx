@@ -3,7 +3,6 @@ import { Icon } from "@iconify/react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -25,22 +24,18 @@ interface ManagementDialogProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
   onDownloadNwjs?: () => void;
-  onCleanupOldNwjs?: () => void;
-  onCleanupContainers?: () => void;
+  onImportMkxpz?: () => void;
   onUpdateEngine?: (engine: EngineDto) => void;
   onRemoveEngine?: (engine: EngineDto) => void;
-  onRemoveAllGames?: () => Promise<void>;
 }
 
 export default function ManagementDialog({
   open,
   onOpenChange,
   onDownloadNwjs,
-  onCleanupOldNwjs,
-  onCleanupContainers,
+  onImportMkxpz,
   onUpdateEngine,
   onRemoveEngine,
-  onRemoveAllGames,
 }: ManagementDialogProps) {
   const { t } = useI18n();
   const [engines, setEngines] = useState<EngineDto[]>([]);
@@ -51,9 +46,10 @@ export default function ManagementDialog({
   const [bottlesEnabled, setBottlesEnabled] = useState(false);
   const [bottlesList, setBottlesList] = useState<string[]>([]);
   const [defaultBottle, setDefaultBottle] = useState("");
-  const [removeAllConfirmOpen, setRemoveAllConfirmOpen] = useState(false);
-  const [removingAllGames, setRemovingAllGames] = useState(false);
   const bottlesInstallCommand = 'flatpak install flathub com.usebottles.bottles';
+
+  const nwjsEngines = engines.filter(e => e.engineType === "nwjs");
+  const mkxpzEngines = engines.filter(e => e.engineType === "mkxpz");
 
   async function fetchEngines() {
     setLoading(true);
@@ -117,17 +113,6 @@ export default function ManagementDialog({
     }
   }, [open]);
 
-  async function confirmRemoveAllGames() {
-    if (!onRemoveAllGames || removingAllGames) return;
-    setRemovingAllGames(true);
-    try {
-      await onRemoveAllGames();
-      setRemoveAllConfirmOpen(false);
-    } finally {
-      setRemovingAllGames(false);
-    }
-  }
-
   /** 简化布局行 */
   const FormRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div className="flex items-center justify-between gap-4">
@@ -136,8 +121,59 @@ export default function ManagementDialog({
     </div>
   );
 
+  /** 运行器专用行 */
+  function RuntimeRow({
+    icon,
+    name,
+    engines,
+    onInstall,
+    onUpdate,
+    onRemove,
+  }: {
+    icon: string;
+    name: string;
+    engines: EngineDto[];
+    onInstall?: () => void;
+    onUpdate?: (engine: EngineDto) => void;
+    onRemove?: (engine: EngineDto) => void;
+  }) {
+    const installed = engines.length > 0;
+    // 取最新安装的
+    const latest = engines.sort((a, b) => b.installedAt - a.installedAt)[0];
+
+    return (
+      <div className="rounded border px-3 py-2 space-y-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon icon={icon} className="h-4 w-4 shrink-0" />
+            <span className="text-sm font-medium truncate">{name}</span>
+            {installed && (
+              <span className="text-xs text-muted-foreground">v{latest.version}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {installed ? (
+              <>
+                <Button variant="ghost" size="xs" onClick={() => onUpdate?.(latest)}>
+                  <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="xs" className="text-destructive" onClick={() => onRemove?.(latest)}>
+                  <Icon icon="ri:delete-bin-line" className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" size="xs" onClick={onInstall}>
+                <Icon icon="ri:download-line" className="h-3.5 w-3.5 mr-1" />
+                {t("common.install")}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -145,61 +181,34 @@ export default function ManagementDialog({
         </DialogHeader>
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-          {/* 快速操作 */}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={onDownloadNwjs}>
-              <Icon icon="ri:download-line" className="h-3.5 w-3.5 mr-1" />
-              {t("maintenance.installNwjs")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={onCleanupOldNwjs}>
-              <Icon icon="ri:delete-bin-line" className="h-3.5 w-3.5 mr-1" />
-              {t("maintenance.cleanupOld")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={onCleanupContainers}>
-              <Icon icon="ri:folder-reduce-line" className="h-3.5 w-3.5 mr-1" />
-              {t("maintenance.cleanupContainers")}
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => setRemoveAllConfirmOpen(true)}>
-              <Icon icon="ri:delete-bin-6-line" className="h-3.5 w-3.5 mr-1" />
-              {t("maintenance.removeAllGames")}
-            </Button>
-          </div>
-
-          {/* 已安装运行时 */}
-          <div className="pt-2 border-t space-y-2">
+          {/* 运行时区域 — 常驻显示 */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">{t("maintenance.runtimes")}</span>
               <Button variant="ghost" size="xs" disabled={loading} onClick={fetchEngines}>
                 <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
               </Button>
             </div>
-            {engines.length === 0 ? (
-              <div className="text-xs text-muted-foreground py-2">
-                {t("maintenance.noRuntimes")}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {engines.map((engine) => (
-                  <div
-                    key={engine.id}
-                    className="flex items-center justify-between rounded border px-2 py-1.5 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <span className="truncate">{engine.name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">v{engine.version}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="xs" onClick={() => onUpdateEngine?.(engine)}>
-                        <Icon icon="ri:refresh-line" className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="xs" className="text-destructive" onClick={() => onRemoveEngine?.(engine)}>
-                        <Icon icon="ri:delete-bin-line" className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+
+            {/* NW.js 行 */}
+            <RuntimeRow
+              icon="ri:window-line"
+              name="NW.js"
+              engines={nwjsEngines}
+              onInstall={onDownloadNwjs}
+              onUpdate={onUpdateEngine}
+              onRemove={onRemoveEngine}
+            />
+
+            {/* mkxp-z 行 */}
+            <RuntimeRow
+              icon="ri:gamepad-line"
+              name="mkxp-z"
+              engines={mkxpzEngines}
+              onInstall={onImportMkxpz}
+              onUpdate={onImportMkxpz}
+              onRemove={onRemoveEngine}
+            />
           </div>
 
           {/* Bottles 集成 */}
@@ -235,7 +244,7 @@ export default function ManagementDialog({
                       onValueChange={updateDefaultBottle}
                       disabled={bottlesLoading || bottlesList.length === 0 || !bottlesEnabled}
                     >
-                      <SelectTrigger size="sm" className="w-[140px]">
+                      <SelectTrigger size="sm" className="w-35">
                         <SelectValue placeholder={t("maintenance.selectBottle")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -260,25 +269,5 @@ export default function ManagementDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    <Dialog open={removeAllConfirmOpen} onOpenChange={setRemoveAllConfirmOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("maintenance.removeAllGamesConfirmTitle")}</DialogTitle>
-          <DialogDescription>
-            {t("maintenance.removeAllGamesConfirmDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" disabled={removingAllGames} onClick={() => setRemoveAllConfirmOpen(false)}>
-            {t("common.cancel")}
-          </Button>
-          <Button variant="destructive" disabled={removingAllGames} onClick={confirmRemoveAllGames}>
-            {removingAllGames && <Icon icon="ri:loader-4-line" className="h-4 w-4 animate-spin mr-1" />}
-            {t("maintenance.removeAllGamesConfirmAction")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    </>
   );
 }

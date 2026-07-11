@@ -117,7 +117,7 @@ export interface GameConfig {
   /** 运行时版本 */
   runtimeVersion?: string
   /** 启动运行器；auto 表示使用引擎插件默认策略 */
-  runner?: "auto" | "native" | "nwjs" | "bottles" | string
+  runner?: "auto" | "native" | "nwjs" | "mkxpz" | "bottles" | string
   /** 启动参数 */
   args: string[]
   /** 沙盒主目录 */

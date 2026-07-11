@@ -97,23 +97,25 @@ export default function App() {
 
   const {
     handleDownloadNwjs,
-    handleCleanupContainers,
-    handleCleanupOldNwjs,
+    handleImportMkxpz,
     handleUpdateEngine,
     handleRemoveEngine,
-    handleRemoveAllGames,
   } = useMaintenanceActions({ updateTask });
 
   // 引擎筛选选项（按分类分组，标签显示分类名而非引擎名）
   const filterOptions = useMemo(() => [
-    { value: "all", label: t("library.filterAll") },
-    ...[...engineReg.categories.keys()].sort().map(cat => ({
-      value: cat,
-      label: cat === "nwjs" ? "NW.js" :
-             cat === "renpy" ? "Ren'Py" :
-             cat === "other" ? t("library.filterOther") : cat,
-    }))
-  ], [engineReg.categories, t]);
+    { value: "all", label: "All" },
+    ...[...engineReg.categories.keys()].sort().map((cat) => {
+      const categoryEngines = engineReg.categories.get(cat) ?? [];
+      const label = categoryEngines
+        .slice()
+        .sort((a, b) => a.priority - b.priority)[0]?.name ?? cat;
+      return {
+        value: cat,
+        label,
+      };
+    }),
+  ], [engineReg.categories]);
 
   // 过滤后的游戏列表
   const filteredGames = useMemo(() => {
@@ -253,11 +255,9 @@ export default function App() {
         open={manageDialog.isOpen}
         onOpenChange={manageDialog.setOpen}
         onDownloadNwjs={handleDownloadNwjs}
-        onCleanupOldNwjs={handleCleanupOldNwjs}
-        onCleanupContainers={handleCleanupContainers}
+        onImportMkxpz={handleImportMkxpz}
         onUpdateEngine={handleUpdateEngine}
         onRemoveEngine={handleRemoveEngine}
-        onRemoveAllGames={handleRemoveAllGames}
       />
 
       <PluginsDialog

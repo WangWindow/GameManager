@@ -55,25 +55,21 @@ pub async fn import_game_dir(
         return Err(e);
     }
     let mut config = default_game_config(&game);
-    let (entry_patterns, runner, sandbox_home) = {
+    let (entry_patterns, sandbox_home) = {
         let registry = state.engine_registry.lock().await;
         registry
             .get_entry(&engine_type)
             .map(|e| {
-                let runner = match e.profile.launch.strategy.as_str() {
-                    "nwjs" => "nwjs",
-                    "bottles" => "bottles",
-                    _ => "native",
-                };
                 (
                     e.profile.launch.entry_patterns.clone(),
-                    runner.to_string(),
                     e.profile.launch.sandbox_home,
                 )
             })
-            .unwrap_or_else(|| (Vec::new(), "auto".to_string(), true))
+            .unwrap_or_else(|| (Vec::new(), true))
     };
-    config.runner = runner;
+    // 自动模式会在启动时依据插件、入口类型和已安装运行时解析；这样在安装
+    // mkxp-z 后，既有 VX/VX Ace 游戏也能自动切换，不需要重新导入。
+    config.runner = "auto".to_string();
     config.sandbox_home = sandbox_home;
     if is_linux_native_entry(exe_path) {
         config.runner = "native".to_string();
@@ -93,7 +89,7 @@ pub async fn import_game_dir(
         let mut db_lock = state.db.lock().await;
         if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await
         {
-            config.use_bottles = val == "1" && config.runner == "bottles";
+            config.use_bottles = val == "1" && !is_linux_native_entry(exe_path);
         }
     }
     let _ = file_service.write_game_config(&config_path, &config);

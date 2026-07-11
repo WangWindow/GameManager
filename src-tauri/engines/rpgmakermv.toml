@@ -1,6 +1,6 @@
 [meta]
 id = "rpgmakermv"
-name = "RPG Maker MV"
+name = "RPG Maker MV/MZ"
 category = "nwjs"
 icon = "ri:window-line"
 priority = 2
@@ -8,15 +8,29 @@ priority = 2
 [detection]
 min_score = 0
 
-[[detection.required]]
+# MV 核心文件
+[[detection.optional]]
 type = "file_exists"
 path = "js/rpg_core.js"
+weight = 3
 
 [[detection.optional]]
 type = "file_exists"
 path = "js/rpg_managers.js"
+weight = 2
+
+# MZ 核心文件
+[[detection.optional]]
+type = "file_exists"
+path = "js/rmmz_core.js"
 weight = 3
 
+[[detection.optional]]
+type = "file_exists"
+path = "js/rmmz_managers.js"
+weight = 2
+
+# 两者均有的公共文件
 [[detection.required]]
 type = "file_exists"
 path = "data/System.json"

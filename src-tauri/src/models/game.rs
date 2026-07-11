@@ -35,8 +35,7 @@ impl EngineType {
         match s.to_lowercase().as_str() {
             "rpgmakervx" | "rpg_maker_vx" => Self::RpgMakerVX,
             "rpgmakervxace" | "rpg_maker_vx_ace" => Self::RpgMakerVXAce,
-            "rpgmakermv" | "rpg_maker_mv" => Self::RpgMakerMV,
-            "rpgmakermz" | "rpg_maker_mz" => Self::RpgMakerMZ,
+            "rpgmakermv" | "rpg_maker_mv" | "rpgmakermz" | "rpg_maker_mz" => Self::RpgMakerMV,
             "renpy" => Self::RenPy,
             "unity" => Self::Unity,
             "godot" => Self::Godot,
@@ -71,7 +70,7 @@ pub struct GameConfig {
     pub entry_path: String,
     /// 运行时版本
     pub runtime_version: Option<String>,
-    /// 启动运行器：auto | native | nwjs | bottles。
+    /// 启动运行器：auto | native | nwjs | mkxpz | bottles。
     #[serde(default = "default_runner")]
     pub runner: String,
     /// 启动参数

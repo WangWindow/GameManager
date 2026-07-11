@@ -211,7 +211,6 @@ pub fn run() {
 
             app.manage(commands::engine::EngineState {
                 engine_service: Arc::new(Mutex::new(engine_service)),
-                db: db.clone(),
             });
 
             app.manage(commands::settings::SettingsState {
@@ -260,7 +259,6 @@ pub fn run() {
             // 设置相关命令
             commands::get_app_settings,
             commands::set_container_root,
-            commands::set_nwjs_keep_latest_only,
             commands::get_platform,
             commands::get_system_theme,
             commands::get_capabilities,
@@ -268,8 +266,8 @@ pub fn run() {
             commands::set_integration_settings,
             commands::get_nwjs_stable_info,
             commands::download_nwjs_stable,
-            commands::cleanup_old_nwjs_versions,
             commands::cleanup_unused_containers,
+            commands::import_mkxpz_archive,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri应用运行失败");

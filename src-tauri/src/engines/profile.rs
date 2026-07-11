@@ -160,7 +160,7 @@ impl DetectionRuleDef {
 #[allow(dead_code)]
 #[serde(deny_unknown_fields)]
 pub struct LaunchConfig {
-    /// 启动策略类型：native | nwjs | external | bottles
+    /// 启动策略类型：native | nwjs | mkxpz | external | bottles
     pub strategy: String,
 
     /// 入口可执行文件匹配模式（按优先级排列）
@@ -180,7 +180,7 @@ pub struct LaunchConfig {
     pub sandbox_home: bool,
 
     // ── NW.js 专用字段 ──
-    /// NW.js 运行时 ID（仅在 strategy = "nwjs" 时需要）
+    /// 运行时 ID（strategy = "nwjs" 或 "mkxpz" 时需要）
     #[serde(default)]
     pub runtime_id: String,
 
@@ -214,9 +214,9 @@ impl LaunchConfig {
     pub fn validate(&self) -> Result<(), String> {
         match self.strategy.as_str() {
             "native" => {}
-            "nwjs" => {
+            "nwjs" | "mkxpz" => {
                 if self.runtime_id.is_empty() {
-                    return Err("nwjs 策略缺少 runtime_id 字段".into());
+                    return Err(format!("{} 策略缺少 runtime_id 字段", self.strategy));
                 }
             }
             "external" | "bottles" => {

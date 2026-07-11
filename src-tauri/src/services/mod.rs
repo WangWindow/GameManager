@@ -6,6 +6,6 @@ pub mod game;
 pub mod logger;
 
 pub use engine::EngineService;
-pub use fs::FileService;
+pub use fs::{ArchiveService, FileService};
 pub use game::launcher::LauncherService;
 pub use game::manager::GameService;

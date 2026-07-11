@@ -8,8 +8,6 @@
 export interface AppSettings {
   /** 容器根目录 */
   containerRoot: string
-  /** NW.js 仅保留最新版本 */
-  nwjsKeepLatestOnly: boolean
 }
 
 /**
@@ -46,6 +44,14 @@ export interface NwjsInstallResult {
  */
 export interface CleanupResult {
   deleted: number
+}
+
+/**
+ * mkxp-z 导入结果
+ */
+export interface MkxpzImportResult {
+  version: string
+  installDir: string
 }
 
 /**

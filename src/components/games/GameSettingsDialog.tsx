@@ -444,6 +444,7 @@ export default function GameSettingsDialog({
                   <SelectItem value="auto">跟随引擎默认</SelectItem>
                   <SelectItem value="native">Linux 原生</SelectItem>
                   <SelectItem value="nwjs">NW.js</SelectItem>
+                  <SelectItem value="mkxpz">mkxp-z</SelectItem>
                   <SelectItem value="bottles">Bottles</SelectItem>
                 </SelectContent>
               </Select>
@@ -465,18 +466,18 @@ export default function GameSettingsDialog({
                       onValueChange={(v) => setBottleName(v)}
                       disabled={bottlesLoading || bottlesList.length === 0}
                     >
-                  <SelectTrigger size="sm">
-                    <SelectValue placeholder={t("maintenance.selectBottle")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {bottlesList.map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormRow>
+                      <SelectTrigger size="sm">
+                        <SelectValue placeholder={t("maintenance.selectBottle")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bottlesList.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormRow>
                 )}
               </>
             )}

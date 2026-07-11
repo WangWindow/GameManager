@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  cleanupUnusedContainers,
-  cleanupOldNwjsVersions,
   deleteEngine,
   downloadNwjsStable,
   getEngineUpdateInfo,
   getNwjsStableInfo,
+  importMkxpzArchive,
   updateEngine,
-  removeAllGames,
 } from "@/lib/api";
 import { translate } from "@/i18n";
 import type { EngineDto } from "@/types";
@@ -32,35 +30,6 @@ export function useMaintenanceActions(options: Options) {
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : translate("maintenance.toastDownloadFailed");
-      toast.error(msg);
-    } finally {
-      setMaintenanceLoading(false);
-    }
-  }
-
-  async function handleCleanupContainers() {
-    if (maintenanceLoading) return;
-    setMaintenanceLoading(true);
-    try {
-      const res = await cleanupUnusedContainers();
-      toast.success(translate("maintenance.toastCleanupDone", { count: res.deleted }));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : translate("maintenance.toastCleanupFailed");
-      toast.error(msg);
-    } finally {
-      setMaintenanceLoading(false);
-    }
-  }
-
-  async function handleCleanupOldNwjs() {
-    if (maintenanceLoading) return;
-    setMaintenanceLoading(true);
-    try {
-      const res = await cleanupOldNwjsVersions();
-      toast.success(translate("maintenance.toastCleanupOldNwjsDone", { count: res.deleted }));
-      window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : translate("maintenance.toastCleanupOldNwjsFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);
@@ -95,17 +64,25 @@ export function useMaintenanceActions(options: Options) {
     }
   }
 
-  async function handleRemoveAllGames() {
-    if (maintenanceLoading) return;
-    setMaintenanceLoading(true);
+  async function handleImportMkxpz() {
     try {
-      const count = await removeAllGames();
-      toast.success(translate("maintenance.toastRemoveAllGamesDone", { count }));
-      window.dispatchEvent(new CustomEvent("gm:refresh-games"));
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        multiple: false,
+        title: translate("maintenance.importMkxpzTitle"),
+        filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
+      });
+      if (!selected) return;
+      const path = Array.isArray(selected) ? selected[0] ?? "" : selected;
+      if (!path) return;
+
+      setMaintenanceLoading(true);
+      const result = await importMkxpzArchive(path);
+      toast.success(translate("maintenance.toastMkxpzImportDone", { version: result.version }));
+      window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : translate("maintenance.toastRemoveAllGamesFailed");
+      const msg = e instanceof Error ? e.message : translate("maintenance.toastMkxpzImportFailed");
       toast.error(msg);
-      throw e;
     } finally {
       setMaintenanceLoading(false);
     }
@@ -114,10 +91,8 @@ export function useMaintenanceActions(options: Options) {
   return {
     maintenanceLoading,
     handleDownloadNwjs,
-    handleCleanupContainers,
-    handleCleanupOldNwjs,
+    handleImportMkxpz,
     handleUpdateEngine,
     handleRemoveEngine,
-    handleRemoveAllGames,
   };
 }

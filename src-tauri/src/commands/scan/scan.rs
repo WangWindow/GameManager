@@ -160,25 +160,19 @@ pub async fn scan_games(
                     .is_ok()
                 {
                     let mut config = default_game_config(&game);
-                    let (entry_patterns, runner, sandbox_home) = {
+                    let (entry_patterns, sandbox_home) = {
                         let registry = state.engine_registry.lock().await;
                         registry
                             .get_entry(&engine_type)
                             .map(|e| {
-                                let runner = match e.profile.launch.strategy.as_str() {
-                                    "nwjs" => "nwjs",
-                                    "bottles" => "bottles",
-                                    _ => "native",
-                                };
                                 (
                                     e.profile.launch.entry_patterns.clone(),
-                                    runner.to_string(),
                                     e.profile.launch.sandbox_home,
                                 )
                             })
-                            .unwrap_or_else(|| (Vec::new(), "auto".to_string(), true))
+                            .unwrap_or_else(|| (Vec::new(), true))
                     };
-                    config.runner = runner;
+                    config.runner = "auto".to_string();
                     config.sandbox_home = sandbox_home;
                     if let Some(entry) = entry_exe.as_deref()
                         && is_linux_native_entry(entry)
@@ -202,7 +196,10 @@ pub async fn scan_games(
                         if let Ok(Some(val)) =
                             crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await
                         {
-                            config.use_bottles = val == "1" && config.runner == "bottles";
+                            config.use_bottles = val == "1"
+                                && entry_exe
+                                    .as_deref()
+                                    .is_none_or(|entry| !is_linux_native_entry(entry));
                         }
                     }
                     let _ = cached_write_config(

@@ -7,7 +7,6 @@ use tokio::sync::Mutex;
 /// 引擎状态
 pub struct EngineState {
     pub engine_service: Arc<Mutex<EngineService>>,
-    pub db: Arc<Mutex<toasty::Db>>,
 }
 
 /// 获取所有引擎
@@ -47,7 +46,7 @@ pub async fn add_engine(
     Ok(service.to_dto(engine))
 }
 
-/// 删除引擎
+/// 删除引擎（同时删除运行器目录及空父目录）
 #[tauri::command]
 pub async fn delete_engine(
     id: String,
@@ -64,6 +63,12 @@ pub async fn delete_engine(
             if crate::utils::path::is_within(&engine_path, &app_data_dir) {
                 if engine_path.is_dir() {
                     let _ = std::fs::remove_dir_all(&engine_path);
+                    // 尝试清理空父目录
+                    if let Some(parent) = engine_path.parent() {
+                        if parent.is_dir() && parent.read_dir().map(|mut i| i.next().is_none()).unwrap_or(false) {
+                            let _ = std::fs::remove_dir(parent);
+                        }
+                    }
                 } else if engine_path.is_file() {
                     let _ = std::fs::remove_file(&engine_path);
                 }
@@ -148,30 +153,14 @@ pub async fn update_engine(
     )
     .await?;
 
-    if let Ok(app_data_dir) = app.path().app_data_dir() {
-        let engine_path =
-            crate::utils::path::canonicalize(std::path::Path::new(&engine.engine_path));
-        if crate::utils::path::is_within(&engine_path, &app_data_dir) {
-            if engine_path.is_dir() {
-                let _ = std::fs::remove_dir_all(&engine_path);
-            } else if engine_path.is_file() {
-                let _ = std::fs::remove_file(&engine_path);
-            }
-        }
-    }
+    remove_old_engine_path(&app, &engine.engine_path);
 
     service
         .update_engine_install(&engine.id, info.version.clone(), result.install_dir.clone())
         .await?;
 
-    let mut db_lock = state.db.lock().await;
-    let keep_latest = crate::db::get_setting(&mut *db_lock, SETTING_NWJS_KEEP_LATEST_ONLY)
-        .await?
-        .map(|v| v != "0")
-        .unwrap_or(true);
-    if keep_latest {
-        prune_old_nwjs_engines(&service, &app, &engine.id, &engine.name).await?;
-    }
+    // 默认清理旧版 NW.js
+    prune_old_nwjs_engines(&service, &app, &engine.id, &engine.name).await?;
 
     Ok(EngineUpdateResult {
         engine_id: engine.id,
@@ -180,6 +169,20 @@ pub async fn update_engine(
         to_version: info.version,
         install_dir: Some(result.install_dir),
     })
+}
+
+/// 移除旧的引擎路径（如果属于应用数据目录）。
+fn remove_old_engine_path(app: &AppHandle, path: &str) {
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        let engine_path = crate::utils::path::canonicalize(std::path::Path::new(path));
+        if crate::utils::path::is_within(&engine_path, &app_data_dir) {
+            if engine_path.is_dir() {
+                let _ = std::fs::remove_dir_all(&engine_path);
+            } else if engine_path.is_file() {
+                let _ = std::fs::remove_file(&engine_path);
+            }
+        }
+    }
 }
 
 async fn prune_old_nwjs_engines(

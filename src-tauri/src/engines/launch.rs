@@ -90,6 +90,80 @@ fn find_nw_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
     ))
 }
 
+/// mkxp-z 原生 RGSS 运行器策略。
+///
+/// 将 mkxp-z 运行时以游戏目录为工作目录启动。
+/// mkxp-z 是跨平台的 RGSS (RPG Maker XP/VX/VX Ace) 兼容实现，
+/// 可在 Linux 上原生运行 VX Ace 等游戏，无需 Wine。
+pub struct MkxpzLauncher;
+
+impl LaunchStrategy for MkxpzLauncher {
+    fn strategy_name(&self) -> &str {
+        "mkxpz"
+    }
+
+    fn launch(
+        &self,
+        game_path: &Path,
+        config: &LaunchConfig,
+        ctx: &dyn LaunchContext,
+    ) -> Result<Child, String> {
+        let runtime_id = &config.runtime_id;
+        if runtime_id.is_empty() {
+            return Err("mkxp-z 运行时 ID 未配置".into());
+        }
+
+        let runtime_path = ctx
+            .get_runtime(runtime_id)
+            .ok_or_else(|| format!("mkxp-z 运行时 '{}' 未安装", runtime_id))?;
+
+        // 查找 mkxp-z 二进制文件
+        let binary = find_mkxpz_binary(&runtime_path)?;
+
+        let mut args: Vec<String> = Vec::new();
+        args.extend(config.args.clone());
+        // mkxp-z 将工作目录视为游戏目录，只需切换工作目录即可
+        // 无需额外参数
+
+        ctx.spawn(&binary.to_string_lossy(), &args, game_path, &[])
+    }
+}
+
+/// 在运行时目录中查找 mkxp-z 可执行文件。
+fn find_mkxpz_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
+    #[cfg(target_os = "linux")]
+    let candidates = ["mkxp-z.x86_64", "mkxp-z", "mkxp-z.AppImage"];
+    #[cfg(not(target_os = "linux"))]
+    let candidates = ["mkxp-z.exe", "mkxp-z"];
+
+    for name in &candidates {
+        let candidate = runtime_dir.join(name);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    // 也查找子目录（如解压后可能在子目录中）
+    if let Ok(entries) = std::fs::read_dir(runtime_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                for name in &candidates {
+                    let candidate = path.join(name);
+                    if candidate.is_file() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "在 {} 中找不到 mkxp-z 可执行文件",
+        runtime_dir.display()
+    ))
+}
+
 pub struct ExternalLauncher;
 
 impl LaunchStrategy for ExternalLauncher {
@@ -140,6 +214,7 @@ pub fn build_strategy(name: &str) -> Result<Box<dyn LaunchStrategy>, String> {
     match name {
         "native" => Ok(Box::new(NativeLauncher)),
         "nwjs" => Ok(Box::new(NwJsLauncher)),
+        "mkxpz" => Ok(Box::new(MkxpzLauncher)),
         "external" => Ok(Box::new(ExternalLauncher)),
         // Bottles 需要游戏级配置（bottle 名称和全局集成状态），实际执行由
         // launcher service 完成；这里保留可验证的插件策略占位实现。

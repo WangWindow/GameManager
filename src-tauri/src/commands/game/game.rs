@@ -1,5 +1,4 @@
 use super::cover_resolver::fill_cover_from_config;
-use crate::commands::scan::legacy_detection::detect_engine_type;
 use crate::commands::state::{AppState, cache_remove};
 use crate::db::schema::Game;
 use crate::models::{AddGameInput, GameConfig, GameDto, UpdateGameInput};
@@ -192,13 +191,8 @@ pub(crate) fn default_game_config(game: &Game) -> GameConfig {
     }
 }
 
-/// 归一化引擎类型：若为 "nwjs" 则尝试通过文件系统检测推断实际引擎，否则保持不变。
+/// 归一化引擎类型：保持数据库里记录的引擎类型，不再使用硬编码兜底检测。
 pub(crate) fn normalize_engine_type(game: &Game) -> String {
-    if game.engine_type == "nwjs" {
-        if let Some(detected) = detect_engine_type(Path::new(&game.game_path)) {
-            return detected;
-        }
-    }
     game.engine_type.clone()
 }
 

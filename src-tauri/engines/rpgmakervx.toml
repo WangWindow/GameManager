@@ -1,22 +1,21 @@
 [meta]
 id = "rpgmakervx"
-name = "RPG Maker VX"
-category = "nwjs"
+name = "RPG Maker VX / VX Ace"
+category = "mkxpz"
 icon = "ri:window-line"
-priority = 4
+priority = 3
 
 [detection]
 min_score = 3
 
-[[detection.optional]]
+[[detection.required]]
 type = "file_exists"
-path = "Game.exe"
-weight = 2
+path = "Game.ini"
 
 [[detection.optional]]
-type = "file_exists"
-path = "Game"
-weight = 2
+type = "glob_match"
+pattern = "RGSS1*.dll"
+weight = 3
 
 [[detection.optional]]
 type = "glob_match"
@@ -25,15 +24,28 @@ weight = 3
 
 [[detection.optional]]
 type = "glob_match"
-pattern = "RGSS1*.dll"
+pattern = "RGSS3*.dll"
 weight = 3
 
-[[detection.required]]
+[[detection.optional]]
 type = "file_exists"
-path = "Game.ini"
+path = "Game.exe"
+weight = 2
+
+
+[[detection.optional]]
+type = "has_extension"
+ext = "rvdata"
+weight = 2
+
+[[detection.optional]]
+type = "has_extension"
+ext = "rvdata2"
+weight = 2
 
 [launch]
-strategy = "bottles"
+strategy = "mkxpz"
+runtime_id = "mkxpz"
 entry_patterns = ["@native", "Game.exe"]
 args = []
 sandbox_home = true
