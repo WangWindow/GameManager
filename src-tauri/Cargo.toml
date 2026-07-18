@@ -5,7 +5,9 @@ description = "A Tauri App for managing games"
 authors = ["WangWindow <1598593280@qq.com>"]
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = []
+tray = ["tauri/tray-icon"]
 
 [profile.dev]
 incremental = true # 以较小的步骤编译您的二进制文件。
@@ -28,7 +30,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

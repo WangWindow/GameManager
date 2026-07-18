@@ -5,14 +5,14 @@ mod db;
 mod engines;
 mod models;
 mod services;
+#[cfg(feature = "tray")]
+mod tray;
 mod utils;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
-use tauri::menu::MenuBuilder;
-use tauri::tray::TrayIconBuilder;
 use tokio::sync::Mutex;
 
 /// 初始化日志系统
@@ -57,47 +57,6 @@ async fn resolve_container_root(
         return Ok(PathBuf::from(value));
     }
     Ok(default_container_root(app)?)
-}
-
-/// 设置系统托盘
-fn setup_tray(app: &tauri::AppHandle) -> Result<(), String> {
-    let menu = MenuBuilder::new(app)
-        .text("toggle_window", "显示/隐藏")
-        .separator()
-        .text("quit", "退出")
-        .build()
-        .map_err(|e| format!("创建托盘菜单失败: {}", e))?;
-
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or_else(|| "缺少默认窗口图标".to_string())?;
-
-    TrayIconBuilder::with_id("main-tray")
-        .icon(icon)
-        .tooltip("GameManager")
-        .menu(&menu)
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "toggle_window" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let visible = window.is_visible().unwrap_or(true);
-                    if visible {
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                }
-            }
-            "quit" => {
-                app.exit(0);
-            }
-            _ => {}
-        })
-        .build(app)
-        .map_err(|e| format!("创建托盘图标失败: {}", e))?;
-
-    Ok(())
 }
 
 /// 应用程序入口
@@ -222,8 +181,11 @@ pub fn run() {
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
             });
 
-            // 设置托盘
-            setup_tray(app.handle())?;
+            #[cfg(feature = "tray")]
+            {
+                crate::tray::setup_tray(app.handle())?;
+                tracing::info!("系统托盘已启用");
+            }
 
             tracing::info!("GameManager 启动完成");
 
