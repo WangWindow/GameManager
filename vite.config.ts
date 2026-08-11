@@ -31,17 +31,11 @@ export default defineConfig(async () => ({
           }
 
           if (
-            id.includes("@radix-ui") ||
-            id.includes("radix-ui") ||
             id.includes("class-variance-authority") ||
             id.includes("clsx") ||
             id.includes("tailwind-merge")
           ) {
             return "ui-vendor";
-          }
-
-          if (id.includes("i18next") || id.includes("react-i18next")) {
-            return "i18n-vendor";
           }
 
           if (id.includes("motion") || id.includes("@iconify")) {
