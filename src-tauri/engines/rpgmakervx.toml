@@ -1,7 +1,7 @@
 [meta]
 id = "rpgmakervx"
 name = "RPG Maker VX / VX Ace"
-category = "mkxpz"
+category = "bottles"
 icon = "ri:window-line"
 priority = 3
 
@@ -44,8 +44,7 @@ ext = "rvdata2"
 weight = 2
 
 [launch]
-strategy = "mkxpz"
-runtime_id = "mkxpz"
+strategy = "bottles"
 entry_patterns = ["@native", "Game.exe"]
 args = []
 sandbox_home = true

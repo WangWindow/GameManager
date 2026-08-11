@@ -34,17 +34,16 @@ impl LauncherService {
         nwjs_runtime_dir: Option<&Path>,
         config: Option<&GameConfig>,
     ) -> Result<LaunchResult, String> {
-        self.launch_game_with_runtimes(game, container_root, nwjs_runtime_dir, None, config)
+        self.launch_game_with_runtimes(game, container_root, nwjs_runtime_dir, config)
             .await
     }
 
-    /// 启动游戏（完整运行时参数版，支持 NW.js 和 mkxp-z）
+    /// 启动游戏（完整运行时参数版，支持 NW.js 和 Bottles）
     pub async fn launch_game_with_runtimes(
         &self,
         game: &Game,
         container_root: &Path,
         nwjs_runtime_dir: Option<&Path>,
-        mkxpz_runtime_dir: Option<&Path>,
         config: Option<&GameConfig>,
     ) -> Result<LaunchResult, String> {
         // 检查游戏路径是否存在
@@ -67,20 +66,8 @@ impl LauncherService {
                     && (matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
                         || matches!(engine_type, EngineType::Html))));
 
-        let use_mkxpz = !use_nwjs
-            && mkxpz_runtime_dir.is_some()
-            && (options.runner == "mkxpz"
-                || (options.runner == "auto"
-                    && matches!(
-                        engine_type,
-                        EngineType::RpgMakerVX | EngineType::RpgMakerVXAce
-                    )));
-
         let child = if use_nwjs {
             self.launch_nwjs_game(game, game_path, container_root, nwjs_runtime_dir, &options)
-                .await?
-        } else if use_mkxpz {
-            self.launch_mkxpz_game(game, game_path, container_root, mkxpz_runtime_dir, &options)
                 .await?
         } else {
             match engine_type {
@@ -117,6 +104,26 @@ impl LauncherService {
         let exe_path = self.find_rpg_maker_executable(game_path, options.entry_path.as_deref())?;
 
         // 设置工作目录为游戏目录
+        if options.use_bottles {
+            #[cfg(not(target_os = "linux"))]
+            {
+                return Err("Bottles 仅支持在 Linux 上运行".to_string());
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                use crate::services::extension::BottlesService;
+                let cli = BottlesService::detect_cli_sync()
+                    .ok_or_else(|| "未检测到 Bottles CLI".to_string())?;
+                let bottle = options
+                    .bottle_name
+                    .clone()
+                    .ok_or_else(|| "未选择 Bottles bottle".to_string())?;
+                let program = exe_path.to_string_lossy().to_string();
+                return BottlesService::run_executable(&cli, &bottle, &program, &options.args);
+            }
+        }
+
         let mut cmd = Command::new(&exe_path);
         cmd.current_dir(game_path);
 
@@ -248,70 +255,6 @@ impl LauncherService {
         let child = cmd.spawn().map_err(|e| format!("启动游戏失败: {}", e))?;
 
         Ok(child)
-    }
-
-    /// 使用 mkxp-z 原生运行 RPG Maker (XP/VX/VX Ace) 游戏
-    async fn launch_mkxpz_game(
-        &self,
-        game: &Game,
-        game_path: &Path,
-        container_root: &Path,
-        mkxpz_runtime_dir: Option<&Path>,
-        options: &LaunchOptions,
-    ) -> Result<Child, String> {
-        let runtime_dir = mkxpz_runtime_dir.ok_or_else(|| "mkxp-z 运行时未安装".to_string())?;
-
-        let binary = self
-            .find_mkxpz_in_dir(runtime_dir)
-            .ok_or_else(|| format!("在 {} 中找不到 mkxp-z 可执行文件", runtime_dir.display()))?;
-
-        let mut cmd = Command::new(&binary);
-        cmd.current_dir(game_path);
-
-        // mkxp-z 会从 HOME/XDG 数据目录读取用户配置；使用游戏 profile
-        // 作为 HOME，既隔离存档/配置，也不向游戏安装目录写入 mkxp.json。
-        self.apply_home_sandbox(&mut cmd, container_root, &game.profile_key, options);
-
-        self.apply_args(&mut cmd, options);
-
-        let child = cmd
-            .spawn()
-            .map_err(|e| format!("启动 mkxp-z 游戏失败: {}", e))?;
-
-        Ok(child)
-    }
-
-    fn find_mkxpz_in_dir(&self, dir: &Path) -> Option<PathBuf> {
-        #[cfg(target_os = "linux")]
-        let candidates = ["mkxp-z.x86_64", "mkxp-z", "mkxp-z.AppImage"];
-        #[cfg(target_os = "windows")]
-        let candidates = ["mkxp-z.exe", "mkxp-z"];
-        #[cfg(target_os = "macos")]
-        let candidates = ["mkxp-z"];
-
-        for name in &candidates {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-
-        // 也搜索子目录
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    for name in &candidates {
-                        let candidate = path.join(name);
-                        if candidate.is_file() {
-                            return Some(candidate);
-                        }
-                    }
-                }
-            }
-        }
-
-        None
     }
 
     /// 查找 RPG Maker 可执行文件

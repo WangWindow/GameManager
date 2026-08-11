@@ -1,8 +1,6 @@
 use crate::db::schema::Engine;
-use crate::models::{
-    AppSettings, CleanupResult, SETTING_CONTAINER_ROOT, SetContainerRootInput,
-};
-use crate::services::{EngineService, GameService, download::mkxpz, download::nwjs};
+use crate::models::{AppSettings, CleanupResult, SETTING_CONTAINER_ROOT, SetContainerRootInput};
+use crate::services::{EngineService, GameService, download::nwjs};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -197,75 +195,4 @@ pub async fn cleanup_unused_containers(
     }
 
     Ok(CleanupResult { deleted })
-}
-
-// ── mkxp-z 命令 ──────────────────────────────────────────
-
-/// 从本地 ZIP 文件导入安装 mkxp-z。
-#[tauri::command]
-pub async fn import_mkxpz_archive(
-    archive_path: String,
-    app: AppHandle,
-    state: State<'_, SettingsState>,
-) -> Result<mkxpz::MkxpzImportResult, String> {
-    let result = mkxpz::import_from_archive(&app, std::path::Path::new(&archive_path))?;
-
-    let engine_service = state.engine_service.lock().await;
-    let all = engine_service.get_all_engines().await?;
-
-    // 查找是否已安装相同版本
-    let mut current_id: Option<String> = None;
-    for engine in &all {
-        if engine.engine_type != "mkxpz" {
-            continue;
-        }
-        if engine.version == result.version {
-            current_id = Some(engine.id.clone());
-            break;
-        }
-    }
-
-    if current_id.is_none() {
-        let added = engine_service
-            .add_engine(
-                "mkxp-z".to_string(),
-                result.version.clone(),
-                "mkxpz".to_string(),
-                result.install_dir.clone(),
-            )
-            .await?;
-        current_id = Some(added.id);
-    } else if let Some(id) = &current_id {
-        // 已存在同版本，覆盖安装目录
-        engine_service
-            .update_engine_install(id, result.version.clone(), result.install_dir.clone())
-            .await?;
-    }
-
-    // 清理旧版本（仅保留最新）
-    prune_old_mkxpz_engines(&engine_service, &app, current_id.as_deref()).await?;
-
-    Ok(result)
-}
-
-/// 删除旧版 mkxp-z（仅保留最新安装项）。
-async fn prune_old_mkxpz_engines(
-    engine_service: &EngineService,
-    app: &AppHandle,
-    keep_id: Option<&str>,
-) -> Result<(), String> {
-    let engines = engine_service.get_all_engines().await?;
-
-    for engine in engines {
-        if engine.engine_type != "mkxpz" {
-            continue;
-        }
-        if keep_id == Some(engine.id.as_str()) {
-            continue;
-        }
-        remove_engine_path_if_owned(app, &engine.engine_path);
-        engine_service.delete_engine(&engine.id).await?;
-    }
-
-    Ok(())
 }

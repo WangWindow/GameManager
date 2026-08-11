@@ -5,7 +5,6 @@ import {
   downloadNwjsStable,
   getEngineUpdateInfo,
   getNwjsStableInfo,
-  importMkxpzArchive,
   updateEngine,
 } from "@/lib/api";
 import { text } from "@/lib/text";
@@ -64,34 +63,9 @@ export function useMaintenanceActions(options: Options) {
     }
   }
 
-  async function handleImportMkxpz() {
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: false,
-        title: text("maintenance.importMkxpzTitle"),
-        filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
-      });
-      if (!selected) return;
-      const path = Array.isArray(selected) ? selected[0] ?? "" : selected;
-      if (!path) return;
-
-      setMaintenanceLoading(true);
-      const result = await importMkxpzArchive(path);
-      toast.success(text("maintenance.toastMkxpzImportDone", { version: result.version }));
-      window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : text("maintenance.toastMkxpzImportFailed");
-      toast.error(msg);
-    } finally {
-      setMaintenanceLoading(false);
-    }
-  }
-
   return {
     maintenanceLoading,
     handleDownloadNwjs,
-    handleImportMkxpz,
     handleUpdateEngine,
     handleRemoveEngine,
   };

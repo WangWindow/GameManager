@@ -67,8 +67,7 @@ pub async fn import_game_dir(
             })
             .unwrap_or_else(|| (Vec::new(), true))
     };
-    // 自动模式会在启动时依据插件、入口类型和已安装运行时解析；这样在安装
-    // mkxp-z 后，既有 VX/VX Ace 游戏也能自动切换，不需要重新导入。
+    // 自动模式会在启动时依据插件和入口类型解析启动策略。
     config.runner = "auto".to_string();
     config.sandbox_home = sandbox_home;
     if is_linux_native_entry(exe_path) {

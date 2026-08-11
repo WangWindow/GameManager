@@ -449,7 +449,6 @@ export default function GameSettingsDialog({
                   <SelectItem value="auto">跟随引擎默认</SelectItem>
                   <SelectItem value="native">Linux 原生</SelectItem>
                   <SelectItem value="nwjs">NW.js</SelectItem>
-                  <SelectItem value="mkxpz">mkxp-z</SelectItem>
                   <SelectItem value="bottles">Bottles</SelectItem>
                 </SelectContent>
               </Select>

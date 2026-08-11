@@ -37,7 +37,7 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         let runner = config.as_ref().map(|c| c.runner.as_str());
         if runner == Some("nwjs") {
             true
-        } else if runner == Some("native") || runner == Some("bottles") || runner == Some("mkxpz") {
+        } else if runner == Some("native") || runner == Some("bottles") {
             false
         } else if let Some(entry) = registry.get_entry(&game.engine_type) {
             entry.profile.launch.strategy == "nwjs"
@@ -52,25 +52,6 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
         } else {
             engine_service.find_latest_engine_by_type("nwjs").await?
         };
-        engine.map(|e| PathBuf::from(e.engine_path))
-    } else {
-        None
-    };
-
-    // 自动模式需要预先知道 mkxp-z 是否已安装，才能在 mkxp-z 与 Bottles
-    // 之间选择。显式指定 mkxp-z 时也查询运行时以便给出明确错误。
-    let needs_mkxpz = {
-        let runner = config.as_ref().map(|c| c.runner.as_str());
-        runner == Some("mkxpz")
-            || (runner == Some("auto")
-                && matches!(
-                    engine_type,
-                    EngineType::RpgMakerVX | EngineType::RpgMakerVXAce
-                ))
-    };
-    let mkxpz_runtime_dir = if needs_mkxpz {
-        let engine_service = state.engine_service.lock().await;
-        let engine = engine_service.find_latest_engine_by_type("mkxpz").await?;
         engine.map(|e| PathBuf::from(e.engine_path))
     } else {
         None
@@ -129,23 +110,12 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
                 let registry = state.engine_registry.lock().await;
                 if let Some(engine) = registry.get_entry(&game.engine_type) {
                     let strategy = engine.profile.launch.strategy.as_str();
-                    cfg.runner = if strategy == "mkxpz" && mkxpz_runtime_dir.is_none() {
-                        // RGSS 游戏优先原生 mkxp-z；还没有安装时回退到 Bottles。
-                        "bottles".to_string()
-                    } else {
-                        strategy.to_string()
-                    };
+                    cfg.runner = strategy.to_string();
                     cfg.sandbox_home = engine.profile.launch.sandbox_home;
                 } else {
                     cfg.runner = "bottles".to_string();
                 }
             }
-        }
-
-        if cfg.runner == "mkxpz" && mkxpz_runtime_dir.is_none() {
-            return Err(
-                "未安装 mkxp-z 运行时，请先下载并安装，或将启动方式改为 Bottles".to_string(),
-            );
         }
 
         let mut db_lock = state.db.lock().await;
@@ -187,7 +157,6 @@ pub async fn launch_game(id: String, state: State<'_, AppState>) -> Result<Launc
             &game,
             &container_path,
             nwjs_runtime_dir.as_deref(),
-            mkxpz_runtime_dir.as_deref(),
             config.as_ref(),
         )
         .await

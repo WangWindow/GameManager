@@ -39,7 +39,7 @@ glob = "0.3"
 tokio = { version = "1.52", features = ["rt-multi-thread", "macros"] }
 toml = "1"
 uuid = { version = "1.23", features = ["v4", "serde"] }
-toasty = { version = "0.8", features = ["sqlite"] }
+toasty = { version = "0.9", features = ["sqlite"] }
 reqwest = { version = "0.13", default-features = true, features = [
     "stream",
     "gzip",

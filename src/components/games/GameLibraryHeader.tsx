@@ -1,34 +1,21 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useText } from "@/lib/text";
 import { Icon } from "@iconify/react";
 
 interface GameLibraryHeaderProps {
   count: number;
   search: string;
-  selectedEngine: string;
-  engineOptions: Array<{ value: string; label: string }>;
   viewMode: "grid" | "list";
   onSearchChange?: (value: string) => void;
-  onEngineChange?: (value: string) => void;
   onViewModeChange?: (mode: "grid" | "list") => void;
 }
 
 export default function GameLibraryHeader({
   count,
   search,
-  selectedEngine,
-  engineOptions,
   viewMode,
   onSearchChange,
-  onEngineChange,
   onViewModeChange,
 }: GameLibraryHeaderProps) {
   const { t } = useText();
@@ -49,25 +36,6 @@ export default function GameLibraryHeader({
             className="h-8 rounded-md border pl-10"
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange?.(e.target.value)}
           />
-        </div>
-        <div className="ml-2 w-36 shrink-0">
-          <Select
-            value={selectedEngine}
-            onValueChange={(value) => {
-              if (value !== null) onEngineChange?.(value)
-            }}
-          >
-            <SelectTrigger className="h-8">
-              <SelectValue placeholder={t("library.enginePlaceholder")} />
-            </SelectTrigger>
-            <SelectContent>
-              {engineOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         <div className="ml-2 flex items-center gap-1">
           <Button

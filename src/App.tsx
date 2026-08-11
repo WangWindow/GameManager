@@ -34,7 +34,6 @@ import { useMaintenanceActions } from "@/hooks/useMaintenanceActions";
 import { useDialogState, useDeleteConfirmState } from "@/hooks/useDialogState";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { usePersistedState, usePersistedBoolean } from "@/hooks/usePersistedState";
-import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 import { useText } from "@/lib/text";
 
 /** 游戏列表视图模式 */
@@ -57,9 +56,6 @@ export default function App() {
 
   // UI 状态
   const [searchQuery, setSearchQuery] = usePersistedState("gm_search_query", "");
-  const [engineFilter, setEngineFilter] = usePersistedState("gm_engine_filter", "all");
-
-  const engineReg = useEngineRegistry();
 
   // 拖拽导入
   const { isDragging, droppedPath, clearDroppedPath } = useDragDrop();
@@ -95,27 +91,8 @@ export default function App() {
     closeGameSettings: gameSettingsDialog.close,
   });
 
-  const {
-    handleDownloadNwjs,
-    handleImportMkxpz,
-    handleUpdateEngine,
-    handleRemoveEngine,
-  } = useMaintenanceActions({ updateTask });
-
-  // 引擎筛选选项（按分类分组，标签显示分类名而非引擎名）
-  const filterOptions = useMemo(() => [
-    { value: "all", label: "All" },
-    ...[...engineReg.categories.keys()].sort().map((cat) => {
-      const categoryEngines = engineReg.categories.get(cat) ?? [];
-      const label = categoryEngines
-        .slice()
-        .sort((a, b) => a.priority - b.priority)[0]?.name ?? cat;
-      return {
-        value: cat,
-        label,
-      };
-    }),
-  ], [engineReg.categories]);
+  const { handleDownloadNwjs, handleUpdateEngine, handleRemoveEngine } =
+    useMaintenanceActions({ updateTask });
 
   // 过滤后的游戏列表
   const filteredGames = useMemo(() => {
@@ -125,12 +102,9 @@ export default function App() {
         query.length === 0 ||
         game.title.toLowerCase().includes(query) ||
         game.engineType.toLowerCase().includes(query);
-      const matchesType =
-        engineFilter === "all" ||
-        engineReg.getIdsByCategory(engineFilter).includes(game.engineType);
-      return matchesKeyword && matchesType;
+      return matchesKeyword;
     });
-  }, [games, searchQuery, engineFilter, engineReg]);
+  }, [games, searchQuery]);
 
   // 状态栏可见性
   const statusBarVisible = useMemo(
@@ -205,11 +179,8 @@ export default function App() {
               <GameLibraryHeader
                 count={filteredGames.length}
                 search={searchQuery}
-                selectedEngine={engineFilter}
-                engineOptions={filterOptions}
                 viewMode={viewMode}
                 onSearchChange={setSearchQuery}
-                onEngineChange={setEngineFilter}
                 onViewModeChange={setViewMode}
               />
 
@@ -255,7 +226,6 @@ export default function App() {
         open={manageDialog.isOpen}
         onOpenChange={manageDialog.setOpen}
         onDownloadNwjs={handleDownloadNwjs}
-        onImportMkxpz={handleImportMkxpz}
         onUpdateEngine={handleUpdateEngine}
         onRemoveEngine={handleRemoveEngine}
       />

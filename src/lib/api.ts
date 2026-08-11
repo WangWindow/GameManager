@@ -18,7 +18,6 @@ import type {
   SetContainerRootInput,
   NwjsStableInfo,
   NwjsInstallResult,
-  MkxpzImportResult,
   CleanupResult,
   Capabilities,
   IntegrationSettingsInput,
@@ -266,15 +265,6 @@ export async function cleanupOldNwjsVersions(): Promise<CleanupResult> {
  */
 export async function cleanupUnusedContainers(): Promise<CleanupResult> {
   return invoke<CleanupResult>('cleanup_unused_containers')
-}
-
-// ============ mkxp-z 相关API ============
-
-/**
- * 从本地 ZIP 文件导入 mkxp-z
- */
-export async function importMkxpzArchive(archivePath: string): Promise<MkxpzImportResult> {
-  return invoke<MkxpzImportResult>('import_mkxpz_archive', { archivePath })
 }
 
 /**

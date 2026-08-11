@@ -47,14 +47,6 @@ export interface CleanupResult {
 }
 
 /**
- * mkxp-z 导入结果
- */
-export interface MkxpzImportResult {
-  version: string
-  installDir: string
-}
-
-/**
  * 集成选项（可扩展）
  */
 export interface IntegrationOptions {

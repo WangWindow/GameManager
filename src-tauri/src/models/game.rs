@@ -70,7 +70,7 @@ pub struct GameConfig {
     pub entry_path: String,
     /// 运行时版本
     pub runtime_version: Option<String>,
-    /// 启动运行器：auto | native | nwjs | mkxpz | bottles。
+    /// 启动运行器：auto | native | nwjs | bottles。
     #[serde(default = "default_runner")]
     pub runner: String,
     /// 启动参数

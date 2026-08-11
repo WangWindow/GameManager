@@ -3,6 +3,8 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
 
+const SELECT_POSITIONER_CLASS_NAME = "z-50 pointer-events-auto outline-hidden select-none"
+
 function Select<Value, Multiple extends boolean | undefined = false>(
   props: SelectPrimitive.Root.Props<Value, Multiple>
 ) {
@@ -66,6 +68,8 @@ function SelectContent({
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
+        data-slot="select-positioner"
+        className={SELECT_POSITIONER_CLASS_NAME}
         side={side}
         sideOffset={sideOffset}
         align={align}

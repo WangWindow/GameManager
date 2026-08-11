@@ -24,7 +24,6 @@ interface ManagementDialogProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
   onDownloadNwjs?: () => void;
-  onImportMkxpz?: () => void;
   onUpdateEngine?: (engine: EngineDto) => void;
   onRemoveEngine?: (engine: EngineDto) => void;
 }
@@ -33,7 +32,6 @@ export default function ManagementDialog({
   open,
   onOpenChange,
   onDownloadNwjs,
-  onImportMkxpz,
   onUpdateEngine,
   onRemoveEngine,
 }: ManagementDialogProps) {
@@ -49,7 +47,6 @@ export default function ManagementDialog({
   const bottlesInstallCommand = 'flatpak install flathub com.usebottles.bottles';
 
   const nwjsEngines = engines.filter(e => e.engineType === "nwjs");
-  const mkxpzEngines = engines.filter(e => e.engineType === "mkxpz");
 
   async function fetchEngines() {
     setLoading(true);
@@ -200,15 +197,6 @@ export default function ManagementDialog({
               onRemove={onRemoveEngine}
             />
 
-            {/* mkxp-z 行 */}
-            <RuntimeRow
-              icon="ri:gamepad-line"
-              name="mkxp-z"
-              engines={mkxpzEngines}
-              onInstall={onImportMkxpz}
-              onUpdate={onImportMkxpz}
-              onRemove={onRemoveEngine}
-            />
           </div>
 
           {/* Bottles 集成 */}

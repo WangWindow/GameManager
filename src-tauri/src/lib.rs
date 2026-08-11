@@ -221,7 +221,6 @@ pub fn run() {
             commands::get_nwjs_stable_info,
             commands::download_nwjs_stable,
             commands::cleanup_unused_containers,
-            commands::import_mkxpz_archive,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri应用运行失败");
