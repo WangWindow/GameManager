@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { useI18n } from '@/i18n'
+import { useText } from '@/lib/text'
 
 export interface DragDropState {
   /** 是否正在拖拽 */
@@ -34,7 +34,7 @@ export interface DragDropState {
  * }, [droppedPath])
  */
 export function useDragDrop(onDrop?: (path: string) => void): DragDropState {
-  const { t } = useI18n()
+  const { t } = useText()
   const [isDragging, setIsDragging] = useState(false)
   const [droppedPath, setDroppedPath] = useState('')
   const unlistenRef = useRef<(() => void) | null>(null)

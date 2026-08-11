@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { importGameDir, scanGames, saveGameSettings, updateGame, refreshGameCover } from "@/lib/api";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import type { GameConfig } from "@/types";
 
 interface Options {
@@ -13,7 +13,7 @@ interface Options {
 }
 
 export function useGameLibraryActions(options: Options) {
-  const { t } = useI18n();
+  const { t } = useText();
   const [importLoading, setImportLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);

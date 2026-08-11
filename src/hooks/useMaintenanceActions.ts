@@ -8,7 +8,7 @@ import {
   importMkxpzArchive,
   updateEngine,
 } from "@/lib/api";
-import { translate } from "@/i18n";
+import { text } from "@/lib/text";
 import type { EngineDto } from "@/types";
 
 interface Options {
@@ -23,13 +23,13 @@ export function useMaintenanceActions(options: Options) {
     setMaintenanceLoading(true);
     try {
       const info = await getNwjsStableInfo();
-      options.updateTask(translate("maintenance.taskInstallNwjs", { version: info.version }), 0);
+      options.updateTask(text("maintenance.taskInstallNwjs", { version: info.version }), 0);
       await downloadNwjsStable("normal");
-      toast.success(translate("maintenance.toastInstallDone"));
-      options.updateTask(translate("maintenance.taskInstallDone"), 100);
+      toast.success(text("maintenance.toastInstallDone"));
+      options.updateTask(text("maintenance.taskInstallDone"), 100);
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : translate("maintenance.toastDownloadFailed");
+      const msg = e instanceof Error ? e.message : text("maintenance.toastDownloadFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);
@@ -39,12 +39,12 @@ export function useMaintenanceActions(options: Options) {
   async function handleUpdateEngine(engine: EngineDto) {
     const info = await getEngineUpdateInfo(engine.id);
     if (!info.updateAvailable) {
-      toast.info(translate("maintenance.toastAlreadyLatest"));
+      toast.info(text("maintenance.toastAlreadyLatest"));
       return;
     }
     const result = await updateEngine(engine.id);
     if (result.updated) {
-      toast.success(translate("maintenance.toastUpdatedTo", { version: result.toVersion }));
+      toast.success(text("maintenance.toastUpdatedTo", { version: result.toVersion }));
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     }
   }
@@ -54,10 +54,10 @@ export function useMaintenanceActions(options: Options) {
     setMaintenanceLoading(true);
     try {
       await deleteEngine(engine.id);
-      toast.success(translate("maintenance.toastUninstalled", { name: engine.name }));
+      toast.success(text("maintenance.toastUninstalled", { name: engine.name }));
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : translate("maintenance.toastUninstallFailed");
+      const msg = e instanceof Error ? e.message : text("maintenance.toastUninstallFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);
@@ -69,7 +69,7 @@ export function useMaintenanceActions(options: Options) {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const selected = await open({
         multiple: false,
-        title: translate("maintenance.importMkxpzTitle"),
+        title: text("maintenance.importMkxpzTitle"),
         filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
       });
       if (!selected) return;
@@ -78,10 +78,10 @@ export function useMaintenanceActions(options: Options) {
 
       setMaintenanceLoading(true);
       const result = await importMkxpzArchive(path);
-      toast.success(translate("maintenance.toastMkxpzImportDone", { version: result.version }));
+      toast.success(text("maintenance.toastMkxpzImportDone", { version: result.version }));
       window.dispatchEvent(new CustomEvent("gm:refresh-engines"));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : translate("maintenance.toastMkxpzImportFailed");
+      const msg = e instanceof Error ? e.message : text("maintenance.toastMkxpzImportFailed");
       toast.error(msg);
     } finally {
       setMaintenanceLoading(false);

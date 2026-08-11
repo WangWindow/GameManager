@@ -23,7 +23,7 @@ import {
   getIntegrationStatus,
   openPath,
 } from "@/lib/api";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 import type { GameConfig, GameDto } from "@/types";
 
@@ -63,7 +63,7 @@ export default function GameSettingsDialog({
   onSave,
   onRefreshCover,
 }: GameSettingsDialogProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const { enabledEngines, getCategory } = useEngineRegistry();
   const [title, setTitle] = useState("");
   const [engineType, setEngineType] = useState<string>("");
@@ -340,7 +340,12 @@ export default function GameSettingsDialog({
           </FormRow>
 
           <FormRow label={t("gameSettings.engineType")}>
-            <Select value={engineType} onValueChange={(v) => setEngineType(v)}>
+            <Select
+              value={engineType}
+              onValueChange={(value) => {
+                if (value !== null) setEngineType(value)
+              }}
+            >
               <SelectTrigger size="sm">
                 <SelectValue />
               </SelectTrigger>
@@ -463,7 +468,9 @@ export default function GameSettingsDialog({
                   <FormRow label={t("gameSettings.bottlesBottle")}>
                     <Select
                       value={bottleName}
-                      onValueChange={(v) => setBottleName(v)}
+                      onValueChange={(value) => {
+                        if (value !== null) setBottleName(value)
+                      }}
                       disabled={bottlesLoading || bottlesList.length === 0}
                     >
                       <SelectTrigger size="sm">

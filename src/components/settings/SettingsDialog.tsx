@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cleanupUnusedContainers, getAppSettings, removeAllGames, setContainerRoot } from "@/lib/api";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { toast } from "sonner";
@@ -55,7 +55,7 @@ export default function SettingsDialog({
   onThemeModeChange,
   onShowStatusBarChange,
 }: SettingsDialogProps) {
-  const { locale, setLocale, t } = useI18n();
+  const { t } = useText();
   const [containerRoot, setContainerRootInput] = useState("");
   const [savingRoot, setSavingRoot] = useState(false);
   const [cleaningContainers, setCleaningContainers] = useState(false);
@@ -146,7 +146,9 @@ export default function SettingsDialog({
             <SettingRow label={t("settings.theme")}>
               <Select
                 value={themeMode}
-                onValueChange={(v) => onThemeModeChange?.(v as "system" | "light" | "dark")}
+                onValueChange={(value) => {
+                  if (value !== null) onThemeModeChange?.(value as "system" | "light" | "dark")
+                }}
               >
                 <SelectTrigger className="w-24" size="sm">
                   <SelectValue />
@@ -155,18 +157,6 @@ export default function SettingsDialog({
                   <SelectItem value="system">{t("settings.theme.system")}</SelectItem>
                   <SelectItem value="light">{t("settings.theme.light")}</SelectItem>
                   <SelectItem value="dark">{t("settings.theme.dark")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </SettingRow>
-
-            <SettingRow label={t("settings.language")}>
-              <Select value={locale} onValueChange={(v) => setLocale(v as "zh-CN" | "en-US")}>
-                <SelectTrigger className="w-24" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zh-CN">中文</SelectItem>
-                  <SelectItem value="en-US">English</SelectItem>
                 </SelectContent>
               </Select>
             </SettingRow>

@@ -1,6 +1,6 @@
 type MessageMap = Record<string, string>;
 
-export const zhCNMessages: MessageMap = {
+const messages: MessageMap = {
   "common.close": "关闭",
   "common.cancel": "取消",
   "common.refresh": "刷新",
@@ -86,10 +86,6 @@ export const zhCNMessages: MessageMap = {
   "settings.group.appearance": "外观",
   "settings.group.storage": "存储",
   "settings.group.advanced": "高级",
-  "settings.language": "界面语言",
-  "settings.languageDescription": "用于界面文本显示",
-  "settings.language.zh-CN": "简体中文",
-  "settings.language.en-US": "English",
   "settings.theme": "主题",
   "settings.themeDescription": "跟随系统或手动选择",
   "settings.theme.system": "系统",
@@ -195,3 +191,15 @@ export const zhCNMessages: MessageMap = {
   "time.hoursAgo": "{{count}}小时前",
   "time.daysAgo": "{{count}}天前",
 };
+
+export function text(key: string, params?: Record<string, string | number>): string {
+  const message = messages[key] ?? key;
+  return message.replace(/\{\{(\w+)\}\}/g, (placeholder, name: string) => {
+    const value = params?.[name];
+    return value === undefined ? placeholder : String(value);
+  });
+}
+
+export function useText() {
+  return { t: text };
+}

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 
 export function useTauriEvents(updateTask: (label: string, progress: number) => void) {
-  const { t } = useI18n();
+  const { t } = useText();
 
   useEffect(() => {
     let unlisteners: Array<() => void> = [];

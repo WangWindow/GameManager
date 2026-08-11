@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import { useEngineRegistry } from "@/hooks/useEngineRegistry";
 
 interface ImportDialogProps {
@@ -34,7 +34,7 @@ export default function ImportDialog({
   onOpenChange,
   onSubmit,
 }: ImportDialogProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const { enabledEngines } = useEngineRegistry();
   const [executablePath, setExecutablePath] = useState("");
   const [engineType, setEngineType] = useState<string>("other");
@@ -95,7 +95,12 @@ export default function ImportDialog({
 
           <div className="space-y-2">
             <label className="text-sm">{t("import.engineType")}</label>
-            <Select value={engineType} onValueChange={(v) => setEngineType(v)}>
+            <Select
+              value={engineType}
+              onValueChange={(value) => {
+                if (value !== null) setEngineType(value)
+              }}
+            >
               <SelectTrigger size="sm">
                 <SelectValue />
               </SelectTrigger>

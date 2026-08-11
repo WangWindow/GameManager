@@ -22,6 +22,32 @@ pub async fn get_platform() -> Result<String, String> {
 /// 获取系统主题（由 Rust 从 OS 原生接口获取）
 #[tauri::command]
 pub async fn get_system_theme() -> Result<String, String> {
-    let mode = dark_light::detect().unwrap_or(dark_light::Mode::Light);
-    Ok(format!("{:?}", mode).to_lowercase())
+    let detected = match dark_light::detect() {
+        Ok(dark_light::Mode::Dark) => Some("dark"),
+        Ok(dark_light::Mode::Light) => Some("light"),
+        Ok(dark_light::Mode::Unspecified) | Err(_) => None,
+    };
+    if let Some(theme) = detected {
+        return Ok(theme.to_string());
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Some(is_dark) = detect_gnome_color_scheme() {
+        return Ok(if is_dark { "dark" } else { "light" }.to_string());
+    }
+
+    Ok("light".to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn detect_gnome_color_scheme() -> Option<bool> {
+    let output = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    crate::utils::system_theme::parse_color_scheme(&String::from_utf8_lossy(&output.stdout))
 }

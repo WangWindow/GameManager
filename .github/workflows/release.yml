@@ -59,7 +59,7 @@ jobs:
       - name: Build Tauri app
         run: |
           set -e
-          bun run tauri build
+          bun run tauri build --no-bundle
 
       - name: Draft release notes
         id: release_drafter
@@ -98,25 +98,21 @@ jobs:
           } >> $GITHUB_OUTPUT
 
 
-      - name: List Tauri bundles
-        run: ls -lh src-tauri/target/release/bundle
+      - name: List release executable
+        run: ls -lh src-tauri/target/release/gamemanager
 
       - name: Package executable zip
         run: |
           set -e
           cd src-tauri/target/release
-          if [ -f gamemanager ]; then
-            mkdir -p bundle
-            zip -j bundle/gamemanager-linux-x86_64.zip gamemanager
-            echo "Packaged gamemanager into bundle/gamemanager-linux-x86_64.zip"
-          else
-            echo "gamemanager executable not found, skipping zip packaging"
-          fi
+          test -f gamemanager
+          zip -j gamemanager-linux-x86_64.zip gamemanager
+          echo "Packaged gamemanager-linux-x86_64.zip"
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
           body: |
             ${{ steps.release_drafter.outputs.body }}
 
@@ -125,10 +121,7 @@ jobs:
 
             <!-- Note: The commit list above includes all commits between the last tag and this release. -->
           files: |
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.rpm
-            src-tauri/target/release/bundle/**/*.zip
+            src-tauri/target/release/gamemanager-linux-x86_64.zip
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

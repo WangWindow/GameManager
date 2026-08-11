@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 
 interface ConfirmDeleteDialogProps {
   open: boolean;
@@ -22,7 +22,7 @@ export default function ConfirmDeleteDialog({
   onOpenChange,
   onConfirm,
 }: ConfirmDeleteDialogProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const titleSegment = title ? `「${title}」` : "";
 
   return (

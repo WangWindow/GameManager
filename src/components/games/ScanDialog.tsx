@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 
 interface ScanDialogProps {
   open: boolean;
@@ -25,7 +25,7 @@ export default function ScanDialog({
   onOpenChange,
   onSubmit,
 }: ScanDialogProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const [root, setRoot] = useState("");
   const [maxDepth, setMaxDepth] = useState(3);
 

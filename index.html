@@ -6,15 +6,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Game Manager</title>
   <script>
-    // 加载前从后端获取系统主题，避免闪白/闪黑
+    // 在 React 加载前恢复主题：显式偏好 > 最近一次系统主题 > 浏览器媒体偏好。
     (function () {
+      var theme = null;
+      var cachedSystemTheme = null;
       try {
-        var theme = localStorage.getItem('gm_theme');
-        if (theme === 'dark') document.documentElement.classList.add('dark');
-        else if (theme === 'light' || !theme) {
-          // system 或无记录 — 先按浅色渲染，等 Rust 检测结果
-          document.documentElement.classList.remove('dark');
-        }
+        theme = localStorage.getItem('gm_theme');
+        cachedSystemTheme = localStorage.getItem('gm_system_theme');
+      } catch (_) { }
+
+      var isDark = false;
+      if (theme === 'dark') {
+        isDark = true;
+      } else if (theme === 'light') {
+        isDark = false;
+      } else if (cachedSystemTheme === 'dark' || cachedSystemTheme === 'light') {
+        isDark = cachedSystemTheme === 'dark';
+      } else {
+        try {
+          isDark = typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        } catch (_) { }
+      }
+
+      try {
+        document.documentElement.classList.toggle('dark', isDark);
       } catch (_) { }
     })();
   </script>

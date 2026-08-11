@@ -4,7 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useEngineRegistry } from "@/hooks/useEngineRegistry";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import { formatRelativeTime } from "@/lib/utils";
 import type { GameDto } from "@/types";
 
@@ -17,7 +17,7 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game, isLaunching = false, onLaunch, onEdit, onDelete }: GameCardProps) {
-  const { t, locale } = useI18n();
+  const { t } = useText();
   const { getName, getIcon } = useEngineRegistry();
   const coverSrc = useMemo(() => {
     if (!game.coverPath) return "";
@@ -64,7 +64,7 @@ export default function GameCard({ game, isLaunching = false, onLaunch, onEdit, 
           <Icon icon={getIcon(game.engineType)} className="h-3.5 w-3.5" />
           <span className="truncate">{getName(game.engineType)}</span>
           {game.lastPlayedAt && (
-            <span className="truncate">· {formatRelativeTime(game.lastPlayedAt, locale)}</span>
+            <span className="truncate">· {formatRelativeTime(game.lastPlayedAt)}</span>
           )}
         </div>
       </div>

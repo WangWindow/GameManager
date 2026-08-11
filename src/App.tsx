@@ -35,14 +35,14 @@ import { useDialogState, useDeleteConfirmState } from "@/hooks/useDialogState";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { usePersistedState, usePersistedBoolean } from "@/hooks/usePersistedState";
 import { useEngineRegistry } from "@/hooks/useEngineRegistry";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 
 /** 游戏列表视图模式 */
 export type ViewMode = "grid" | "list";
 
 export default function App() {
   // ============ 对话框状态 ============
-  const { t } = useI18n();
+  const { t } = useText();
   const manageDialog = useDialogState();
   const settingsDialog = useDialogState();
   const pluginsDialog = useDialogState();
@@ -74,7 +74,7 @@ export default function App() {
 
   // 游戏数据
   const { games, loading, launchingId, fetchGames, handleLaunchGame, handleDeleteGame } = useGames();
-  const { themeMode, setThemeMode } = useThemeMode();
+  const { themeMode, resolvedTheme, setThemeMode } = useThemeMode();
   const { currentTask, statusBarVisible: taskStatusVisible, updateTask } = useTaskStatus();
   useTauriEvents(updateTask);
 
@@ -307,7 +307,7 @@ export default function App() {
         </div>
       ) : null}
 
-      <Toaster position="bottom-right" theme={themeMode} />
+      <Toaster position="bottom-right" theme={resolvedTheme} />
     </div>
   );
 }

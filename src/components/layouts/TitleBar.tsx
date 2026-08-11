@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import { useWindowControls } from "@/hooks/useWindowControls";
 
 interface TitleBarProps {
@@ -20,7 +20,7 @@ interface TitleBarProps {
 
 export default function TitleBar({ onManage, onImport, onScan, onSettings, onPlugins }: TitleBarProps) {
   const { isTauri, isMaximized, minimize, toggleMaximize, close } = useWindowControls();
-  const { t } = useI18n();
+  const { t } = useText();
 
   return (
     <header
@@ -59,16 +59,18 @@ export default function TitleBar({ onManage, onImport, onScan, onSettings, onPlu
         </Button>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("common.more")}>
-              <Icon icon="ri:more-2-line" className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" className="h-8 w-8" title={t("common.more")}>
+                <Icon icon="ri:more-2-line" className="h-4 w-4" />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onManage}>{t("titleBar.maintenance")}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onPlugins}>{t("titleBar.plugins")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onManage}>{t("titleBar.maintenance")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onPlugins}>{t("titleBar.plugins")}</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onSettings}>{t("common.settings")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onSettings}>{t("common.settings")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

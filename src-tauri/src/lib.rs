@@ -5,8 +5,6 @@ mod db;
 mod engines;
 mod models;
 mod services;
-#[cfg(feature = "tray")]
-mod tray;
 mod utils;
 
 use std::collections::HashMap;
@@ -180,12 +178,6 @@ pub fn run() {
                 ))),
                 container_root: Arc::new(Mutex::new(container_root.to_string_lossy().to_string())),
             });
-
-            #[cfg(feature = "tray")]
-            {
-                crate::tray::setup_tray(app.handle())?;
-                tracing::info!("系统托盘已启用");
-            }
 
             tracing::info!("GameManager 启动完成");
 

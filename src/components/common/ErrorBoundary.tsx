@@ -1,5 +1,5 @@
 import { Component, ReactNode } from "react";
-import { translate } from "@/i18n";
+import { text } from "@/lib/text";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -47,23 +47,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-lg">
             <div className="mb-4 text-4xl">😵</div>
             <h2 className="mb-2 text-lg font-semibold text-foreground">
-              {translate("errorBoundary.title")}
+              {text("errorBoundary.title")}
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              {this.state.error?.message || translate("errorBoundary.unknown")}
+              {this.state.error?.message || text("errorBoundary.unknown")}
             </p>
             <div className="flex justify-center gap-2">
               <button
                 onClick={this.handleReload}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
-                {translate("errorBoundary.reload")}
+                {text("errorBoundary.reload")}
               </button>
             </div>
             {import.meta.env.DEV && this.state.error?.stack && (
               <details className="mt-4 text-left">
                 <summary className="cursor-pointer text-xs text-muted-foreground">
-                  {translate("errorBoundary.details")}
+                  {text("errorBoundary.details")}
                 </summary>
                 <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
                   {this.state.error.stack}

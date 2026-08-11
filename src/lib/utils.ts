@@ -1,7 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { getLocale, translate } from "@/i18n"
-import type { Locale } from "@/i18n/types"
+import { text } from "@/lib/text"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -11,12 +10,11 @@ export function cn(...inputs: ClassValue[]) {
  * 格式化时间戳为日期字符串
  *
  * @param timestamp 时间戳（毫秒）
- * @param locale 可选语言，默认使用当前 i18n 语言
  */
-export function formatDate(timestamp?: number, locale?: Locale): string {
-  if (!timestamp) return translate("time.never", undefined, locale ?? getLocale())
+export function formatDate(timestamp?: number): string {
+  if (!timestamp) return text("time.never")
   const date = new Date(timestamp)
-  return date.toLocaleDateString(locale ?? getLocale(), {
+  return date.toLocaleDateString("zh-CN", {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -27,11 +25,9 @@ export function formatDate(timestamp?: number, locale?: Locale): string {
  * 格式化时间戳为相对时间
  *
  * @param timestamp 时间戳（毫秒）
- * @param locale 可选语言，默认使用当前 i18n 语言
  */
-export function formatRelativeTime(timestamp?: number, locale?: Locale): string {
-  const lng = locale ?? getLocale()
-  if (!timestamp) return translate("time.never", undefined, lng)
+export function formatRelativeTime(timestamp?: number): string {
+  if (!timestamp) return text("time.never")
 
   const now = Date.now()
   const diff = now - timestamp
@@ -41,15 +37,15 @@ export function formatRelativeTime(timestamp?: number, locale?: Locale): string 
   const days = Math.floor(hours / 24)
 
   if (days > 30) {
-    return formatDate(timestamp, lng)
+    return formatDate(timestamp)
   } else if (days > 0) {
-    return translate("time.daysAgo", { count: days }, lng)
+    return text("time.daysAgo", { count: days })
   } else if (hours > 0) {
-    return translate("time.hoursAgo", { count: hours }, lng)
+    return text("time.hoursAgo", { count: hours })
   } else if (minutes > 0) {
-    return translate("time.minutesAgo", { count: minutes }, lng)
+    return text("time.minutesAgo", { count: minutes })
   } else {
-    return translate("time.justNow", undefined, lng)
+    return text("time.justNow")
   }
 }
 

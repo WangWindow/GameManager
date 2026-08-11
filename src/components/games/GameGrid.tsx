@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import GameCard from "./GameCard";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import type { GameDto } from "@/types";
 
 interface GameGridProps {
@@ -22,7 +22,7 @@ export default function GameGrid({
   onEdit,
   onDelete,
 }: GameGridProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const isEmpty = !loading && games.length === 0;
   const isGrid = viewMode === "grid";
 

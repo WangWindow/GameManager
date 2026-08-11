@@ -1,5 +1,5 @@
 import { useState, useEffect, ReactNode } from "react";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 
 interface AppLoaderProps {
   children: ReactNode;
@@ -14,7 +14,7 @@ interface AppLoaderProps {
  * 等待 Tauri 环境就绪后再渲染主应用。
  */
 export function AppLoader({ children, minLoadTime = 300 }: AppLoaderProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

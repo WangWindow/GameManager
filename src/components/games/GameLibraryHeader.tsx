@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import { Icon } from "@iconify/react";
 
 interface GameLibraryHeaderProps {
@@ -31,7 +31,7 @@ export default function GameLibraryHeader({
   onEngineChange,
   onViewModeChange,
 }: GameLibraryHeaderProps) {
-  const { t } = useI18n();
+  const { t } = useText();
 
   return (
     <div className="mb-5 flex items-center justify-between">
@@ -51,7 +51,12 @@ export default function GameLibraryHeader({
           />
         </div>
         <div className="ml-2 w-36 shrink-0">
-          <Select value={selectedEngine} onValueChange={onEngineChange}>
+          <Select
+            value={selectedEngine}
+            onValueChange={(value) => {
+              if (value !== null) onEngineChange?.(value)
+            }}
+          >
             <SelectTrigger className="h-8">
               <SelectValue placeholder={t("library.enginePlaceholder")} />
             </SelectTrigger>

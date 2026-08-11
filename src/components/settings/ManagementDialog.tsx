@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getEngines, getIntegrationStatus, setIntegrationSettings } from "@/lib/api";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import type { EngineDto } from "@/types";
 
 interface ManagementDialogProps {
@@ -37,7 +37,7 @@ export default function ManagementDialog({
   onUpdateEngine,
   onRemoveEngine,
 }: ManagementDialogProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const [engines, setEngines] = useState<EngineDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [bottlesLoading, setBottlesLoading] = useState(false);
@@ -241,7 +241,9 @@ export default function ManagementDialog({
                   <FormRow label={t("maintenance.defaultBottle")}>
                     <Select
                       value={defaultBottle}
-                      onValueChange={updateDefaultBottle}
+                      onValueChange={(value) => {
+                        if (value !== null) void updateDefaultBottle(value)
+                      }}
                       disabled={bottlesLoading || bottlesList.length === 0 || !bottlesEnabled}
                     >
                       <SelectTrigger size="sm" className="w-35">

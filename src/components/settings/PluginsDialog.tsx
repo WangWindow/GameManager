@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { getEngineRegistryDetail, getEngineProfileDetail, setEngineEnabled } from "@/lib/api";
-import { useI18n } from "@/i18n";
+import { useText } from "@/lib/text";
 import type { EngineDetail, EngineProfileDetail } from "@/types";
 
 interface PluginsDialogProps {
@@ -19,7 +19,7 @@ interface PluginsDialogProps {
 }
 
 export default function PluginsDialog({ open, onOpenChange }: PluginsDialogProps) {
-  const { t } = useI18n();
+  const { t } = useText();
   const [plugins, setPlugins] = useState<EngineDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
