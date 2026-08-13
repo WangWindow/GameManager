@@ -182,13 +182,46 @@ pub(crate) fn default_game_config(game: &Game) -> GameConfig {
         engine_type: normalize_engine_type(game),
         entry_path: String::new(),
         runtime_version: game.runtime_version.clone(),
-        runner: "auto".to_string(),
+        runner: default_runner_for_engine(&game.engine_type).to_string(),
         args: Vec::new(),
         sandbox_home: true,
-        use_bottles: false,
         bottle_name: None,
         cover_file: None,
     }
+}
+
+/// 将引擎配置的默认策略在导入阶段固化为游戏自己的启动方式。
+/// Linux 原生入口始终优先于引擎的默认策略。
+pub(crate) fn resolve_concrete_runner(
+    profile_strategy: Option<&str>,
+    is_native_entry: bool,
+) -> &'static str {
+    if is_native_entry {
+        return "native";
+    }
+
+    match profile_strategy {
+        Some("native") => "native",
+        Some("nwjs") => "nwjs",
+        Some("bottles") => "bottles",
+        Some("external") => "external",
+        Some("mkxpz") => "mkxpz",
+        _ => "bottles",
+    }
+}
+
+/// 无法读取引擎配置时的安全默认值。
+pub(crate) fn default_runner_for_engine(engine_type: &str) -> &'static str {
+    match crate::models::EngineType::from_str(engine_type) {
+        crate::models::EngineType::Html
+        | crate::models::EngineType::RpgMakerMV
+        | crate::models::EngineType::RpgMakerMZ => "nwjs",
+        _ => "bottles",
+    }
+}
+
+pub(crate) fn is_supported_runner(runner: &str) -> bool {
+    matches!(runner, "native" | "nwjs" | "bottles" | "mkxpz" | "external")
 }
 
 /// 归一化引擎类型：保持数据库里记录的引擎类型，不再使用硬编码兜底检测。

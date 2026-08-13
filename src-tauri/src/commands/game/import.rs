@@ -1,9 +1,10 @@
 use super::cover::update_game_cover;
 use super::game::{
     default_game_config, is_linux_native_entry, is_nwjs_runtime_dir, normalize_path,
+    resolve_concrete_runner,
 };
 use crate::commands::state::AppState;
-use crate::models::{AddGameInput, ImportGameInput, SETTING_BOTTLES_ENABLED};
+use crate::models::{AddGameInput, ImportGameInput};
 use crate::services::FileService;
 use std::path::Path;
 use tauri::State;
@@ -55,7 +56,7 @@ pub async fn import_game_dir(
         return Err(e);
     }
     let mut config = default_game_config(&game);
-    let (entry_patterns, sandbox_home) = {
+    let (entry_patterns, sandbox_home, strategy) = {
         let registry = state.engine_registry.lock().await;
         registry
             .get_entry(&engine_type)
@@ -63,15 +64,15 @@ pub async fn import_game_dir(
                 (
                     e.profile.launch.entry_patterns.clone(),
                     e.profile.launch.sandbox_home,
+                    e.profile.launch.strategy.clone(),
                 )
             })
-            .unwrap_or_else(|| (Vec::new(), true))
+            .unwrap_or_else(|| (Vec::new(), true, "bottles".to_string()))
     };
-    // 自动模式会在启动时依据插件和入口类型解析启动策略。
-    config.runner = "auto".to_string();
+    config.runner =
+        resolve_concrete_runner(Some(&strategy), is_linux_native_entry(exe_path)).to_string();
     config.sandbox_home = sandbox_home;
     if is_linux_native_entry(exe_path) {
-        config.runner = "native".to_string();
         config.sandbox_home = true;
     }
     if entry_patterns.is_empty() {
@@ -82,14 +83,6 @@ pub async fn import_game_dir(
         }
     } else {
         config.entry_path = executable_path.clone();
-    }
-    // 继承全局 Bottles 设置（仅 Windows .exe，Linux 原生不需要）
-    {
-        let mut db_lock = state.db.lock().await;
-        if let Ok(Some(val)) = crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await
-        {
-            config.use_bottles = val == "1" && !is_linux_native_entry(exe_path);
-        }
     }
     let _ = file_service.write_game_config(&config_path, &config);
 

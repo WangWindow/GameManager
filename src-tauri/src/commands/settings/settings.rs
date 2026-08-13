@@ -1,6 +1,10 @@
 use crate::db::schema::Engine;
 use crate::models::{AppSettings, CleanupResult, SETTING_CONTAINER_ROOT, SetContainerRootInput};
-use crate::services::{EngineService, GameService, download::nwjs};
+use crate::services::{
+    EngineService, GameService,
+    download::{mkxpz, nwjs},
+};
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -99,6 +103,53 @@ pub async fn download_nwjs_stable(
 
     // 默认清理旧版，仅保留最新版本
     prune_old_nwjs_engines(&engine_service, &app, current_id.as_deref(), result.flavor).await?;
+
+    Ok(result)
+}
+
+/// 导入手动下载的 mkxp-z GitHub Actions 构建包。
+/// mkxp-z 的 Actions artifact 并非稳定的匿名下载源，因此由用户在浏览器下载后选择 ZIP。
+#[tauri::command]
+pub async fn import_mkxpz_archive(
+    archive_path: String,
+    app: AppHandle,
+    state: State<'_, SettingsState>,
+) -> Result<mkxpz::MkxpzImportResult, String> {
+    let app_handle = app.clone();
+    let archive_path = Path::new(&archive_path).to_path_buf();
+    let result =
+        tokio::task::spawn_blocking(move || mkxpz::import_archive(&app_handle, &archive_path))
+            .await
+            .map_err(|error| format!("mkxp-z 导入任务失败: {error}"))??;
+    let engine_service = state.engine_service.lock().await;
+    let engines = engine_service.get_all_engines().await?;
+    let mut existing = engines
+        .iter()
+        .filter(|engine| engine.engine_type == "mkxpz");
+
+    if let Some(current) = existing.next() {
+        engine_service
+            .update_engine_install(
+                &current.id,
+                result.version.clone(),
+                result.executable_path.clone(),
+            )
+            .await?;
+    } else {
+        engine_service
+            .add_engine(
+                "mkxp-z".to_string(),
+                result.version.clone(),
+                "mkxpz".to_string(),
+                result.executable_path.clone(),
+            )
+            .await?;
+    }
+
+    // Historical versions are not retained for this managed runtime.
+    for duplicate in existing {
+        engine_service.delete_engine(&duplicate.id).await?;
+    }
 
     Ok(result)
 }

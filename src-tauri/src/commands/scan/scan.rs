@@ -1,13 +1,12 @@
 use crate::commands::game::cover::update_game_cover;
 use crate::commands::game::game::{
     default_game_config, is_linux_native_entry, is_nwjs_runtime_dir, normalize_path,
+    resolve_concrete_runner,
 };
 use crate::commands::game::game_executable::find_renpy_launch_script;
 use crate::commands::state::{AppState, cached_write_config};
 use crate::engines::context::FsDetectionContext;
-use crate::models::{
-    AddGameInput, EngineType, SETTING_BOTTLES_ENABLED, ScanGamesInput, ScanGamesResult,
-};
+use crate::models::{AddGameInput, EngineType, ScanGamesInput, ScanGamesResult};
 use crate::services::FileService;
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -160,7 +159,7 @@ pub async fn scan_games(
                     .is_ok()
                 {
                     let mut config = default_game_config(&game);
-                    let (entry_patterns, sandbox_home) = {
+                    let (entry_patterns, sandbox_home, strategy) = {
                         let registry = state.engine_registry.lock().await;
                         registry
                             .get_entry(&engine_type)
@@ -168,16 +167,20 @@ pub async fn scan_games(
                                 (
                                     e.profile.launch.entry_patterns.clone(),
                                     e.profile.launch.sandbox_home,
+                                    e.profile.launch.strategy.clone(),
                                 )
                             })
-                            .unwrap_or_else(|| (Vec::new(), true))
+                            .unwrap_or_else(|| (Vec::new(), true, "bottles".to_string()))
                     };
-                    config.runner = "auto".to_string();
+                    config.runner = resolve_concrete_runner(
+                        Some(&strategy),
+                        entry_exe.as_deref().is_some_and(is_linux_native_entry),
+                    )
+                    .to_string();
                     config.sandbox_home = sandbox_home;
                     if let Some(entry) = entry_exe.as_deref()
                         && is_linux_native_entry(entry)
                     {
-                        config.runner = "native".to_string();
                         config.sandbox_home = true;
                     }
                     if entry_patterns.is_empty() {
@@ -190,18 +193,6 @@ pub async fn scan_games(
                         config.entry_path = normalize_path(entry);
                     }
 
-                    // 继承全局 Bottles 设置（仅 .exe）
-                    if entry_exe.is_some() {
-                        let mut db_lock = state.db.lock().await;
-                        if let Ok(Some(val)) =
-                            crate::db::get_setting(&mut *db_lock, SETTING_BOTTLES_ENABLED).await
-                        {
-                            config.use_bottles = val == "1"
-                                && entry_exe
-                                    .as_deref()
-                                    .is_none_or(|entry| !is_linux_native_entry(entry));
-                        }
-                    }
                     let _ = cached_write_config(
                         &state.config_cache,
                         &file_service,

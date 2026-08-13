@@ -39,6 +39,13 @@ export interface NwjsInstallResult {
   installDir: string
 }
 
+/** mkxp-z GitHub Actions ZIP 导入结果 */
+export interface MkxpzImportResult {
+  version: string
+  installDir: string
+  executablePath: string
+}
+
 /**
  * 清理容器结果
  */

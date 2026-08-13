@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,7 +69,7 @@ export default function GameSettingsDialog({
   const [engineType, setEngineType] = useState<string>("");
   const [path, setPath] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("");
-  const [runner, setRunner] = useState<GameConfig["runner"]>("auto");
+  const [runner, setRunner] = useState<NonNullable<GameConfig["runner"]>>("bottles");
   const [entryPath, setEntryPath] = useState("");
   const [argsText, setArgsText] = useState("");
   const [sandboxHome, setSandboxHome] = useState(true);
@@ -85,127 +85,9 @@ export default function GameSettingsDialog({
   const [bottlesList, setBottlesList] = useState<string[]>([]);
   const [defaultBottle, setDefaultBottle] = useState("");
   const [bottleName, setBottleName] = useState("");
-  const [useBottles, setUseBottles] = useState(false);
 
-  const isNwjs = useMemo(() => runner === "nwjs" || (runner === "auto" && getCategory(engineType) === "nwjs"), [engineType, getCategory, runner]);
-  const requiresEntryPath = useMemo(() => getCategory(engineType) === "other", [engineType, getCategory]);
-  const canSave = useMemo(() => {
-    const basicValid = !!game && title.trim().length > 0 && path.trim().length > 0;
-    const entryValid = !requiresEntryPath || entryPath.trim().length > 0;
-    return basicValid && entryValid && !settingsLoading;
-  }, [game, title, path, requiresEntryPath, entryPath, settingsLoading]);
-
-  // reset when dialog closes or game changes
-  useEffect(() => {
-    if (!open) {
-      // clear transient fields
-      setEntryPath("");
-      setArgsText("");
-      setSandboxHome(true);
-      setCoverFile("");
-      setRunner("auto");
-      setBottleName("");
-      setSettingsLoaded(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (game) {
-      setTitle(game.title);
-      setEngineType(game.engineType);
-      setPath(game.path);
-      setRuntimeVersion(game.runtimeVersion ?? "");
-      // other values will be filled once settings load
-    }
-  }, [game]);
-
-  // load persistent settings when dialog first opens for a game
-  useEffect(() => {
-    if (!open || !game || settingsLoaded) return;
-
-    setSettingsLoading(true);
-    getGameSettings(game.id)
-      .then((config) => {
-        setEngineType(config.engineType || game.engineType);
-        const resolvedEntry = config.entryPath ? toAbsoluteEntryPath(config.entryPath) : "";
-        setEntryPath(resolvedEntry);
-        setRuntimeVersion(config.runtimeVersion ?? game.runtimeVersion ?? "");
-        setRunner(config.runner ?? "auto");
-        setArgsText((config.args ?? []).join(" "));
-        setSandboxHome(config.sandboxHome ?? true);
-        setCoverFile(config.coverFile ?? "");
-        setBottleName(config.bottleName ?? "");
-        setUseBottles(config.useBottles ?? (config.runner === "bottles" || resolvedEntry.toLowerCase().endsWith(".exe")));
-        // Bottles 探测可能执行外部 CLI，不能阻塞设置界面首次显示。
-        void refreshBottlesStatus();
-        return undefined;
-      })
-      .then(() => {
-        if (!bottleName && defaultBottle) {
-          setBottleName(defaultBottle);
-        }
-        setSettingsLoaded(true);
-      })
-      .catch((e) => {
-        console.error("加载游戏设置失败:", e);
-      })
-      .finally(() => {
-        setSettingsLoading(false);
-      });
-  }, [open, game, settingsLoaded]);
-
-  // when engine type toggles to "other" while dialog is open, refresh bottles
-  const engineCategory = useMemo(() => getCategory(engineType), [engineType, getCategory]);
-  useEffect(() => {
-    if ((engineCategory === "other" || runner === "bottles") && open && !bottlesLoading) {
-      refreshBottlesStatus();
-    }
-  }, [engineCategory, runner, open]);
-
-  // entryPath 变化时自动调整 Bottles 开关
-  useEffect(() => {
-    const lower = entryPath.toLowerCase();
-    if (lower.endsWith(".exe")) {
-      setRunner("bottles");
-      setUseBottles(true);
-    } else if ([".sh", ".appimage", ".run", ".x86_64"].some((ext) => lower.endsWith(ext))) {
-      setRunner("native");
-      setSandboxHome(true);
-      setUseBottles(false);
-    }
-  }, [entryPath]);
-
-  async function handleSave() {
+  const refreshBottlesStatus = useCallback(async function refreshBottlesStatus() {
     if (!game) return;
-    const resolvedEngineType = engineType;
-    const args = argsText.split(/\s+/).map((s) => s.trim()).filter(Boolean);
-    const resolvedEntryPath = toAbsoluteEntryPath(entryPath.trim() || path.trim());
-
-    const settings: GameConfig = {
-      engineType: resolvedEngineType,
-      entryPath: resolvedEntryPath,
-      runtimeVersion: runtimeVersion.trim() || undefined,
-      runner: runner ?? "auto",
-      args,
-      sandboxHome,
-      useBottles: useBottles && bottlesAvailable && bottlesInstalled,
-      bottleName: useBottles ? (bottleName.trim() || undefined) : undefined,
-      coverFile: coverFile.trim() || undefined,
-    };
-
-    onSave?.({
-      id: game.id,
-      title: title.trim(),
-      engineType: resolvedEngineType,
-      path: path.trim(),
-      runtimeVersion: runtimeVersion.trim() || undefined,
-      settings,
-    });
-  }
-
-  async function refreshBottlesStatus() {
-    if (!game) return;
-    if (getCategory(engineType) !== "other") return;
 
     setBottlesLoading(true);
     try {
@@ -233,6 +115,112 @@ export default function GameSettingsDialog({
     } finally {
       setBottlesLoading(false);
     }
+  }, [game]);
+
+  const isNwjs = runner === "nwjs";
+  const isMkxpzSupported = engineType === "rpgmakervx" || engineType === "rpgmakervxace";
+  const requiresEntryPath = useMemo(() => getCategory(engineType) === "other", [engineType, getCategory]);
+  const canSave = useMemo(() => {
+    const basicValid = !!game && title.trim().length > 0 && path.trim().length > 0;
+    const entryValid = !requiresEntryPath || entryPath.trim().length > 0;
+    return basicValid && entryValid && !settingsLoading;
+  }, [game, title, path, requiresEntryPath, entryPath, settingsLoading]);
+
+  // reset when dialog closes or game changes
+  useEffect(() => {
+    if (!open) {
+      // clear transient fields
+      setEntryPath("");
+      setArgsText("");
+      setSandboxHome(true);
+      setCoverFile("");
+      setRunner("bottles");
+      setBottleName("");
+      setSettingsLoaded(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (game) {
+      setTitle(game.title);
+      setEngineType(game.engineType);
+      setPath(game.path);
+      setRuntimeVersion(game.runtimeVersion ?? "");
+      setSettingsLoaded(false);
+      // other values will be filled once settings load
+    }
+  }, [game?.id]);
+
+  // load persistent settings when dialog first opens for a game
+  useEffect(() => {
+    if (!open || !game || settingsLoaded) return;
+
+    setSettingsLoading(true);
+    getGameSettings(game.id)
+      .then((config) => {
+        setEngineType(config.engineType || game.engineType);
+        const resolvedEntry = config.entryPath ? toAbsoluteEntryPath(config.entryPath) : "";
+        setEntryPath(resolvedEntry);
+        setRuntimeVersion(config.runtimeVersion ?? game.runtimeVersion ?? "");
+        setRunner(config.runner ?? "bottles");
+        setArgsText((config.args ?? []).join(" "));
+        setSandboxHome(config.sandboxHome ?? true);
+        setCoverFile(config.coverFile ?? "");
+        setBottleName(config.bottleName ?? "");
+        return undefined;
+      })
+      .then(() => setSettingsLoaded(true))
+      .catch((e) => {
+        console.error("加载游戏设置失败:", e);
+      })
+      .finally(() => {
+        setSettingsLoading(false);
+      });
+  }, [open, game, settingsLoaded]);
+
+  useEffect(() => {
+    if (runner === "bottles" && open) {
+      void refreshBottlesStatus();
+    }
+  }, [runner, open, refreshBottlesStatus]);
+
+  useEffect(() => {
+    if (runner === "bottles" && !bottleName && defaultBottle) {
+      setBottleName(defaultBottle);
+    }
+  }, [runner, bottleName, defaultBottle]);
+
+  useEffect(() => {
+    if (runner === "mkxpz" && !isMkxpzSupported) {
+      setRunner("bottles");
+    }
+  }, [runner, isMkxpzSupported]);
+
+  async function handleSave() {
+    if (!game) return;
+    const resolvedEngineType = engineType;
+    const args = argsText.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+    const resolvedEntryPath = entryPath.trim() ? toAbsoluteEntryPath(entryPath.trim()) : "";
+
+    const settings: GameConfig = {
+      engineType: resolvedEngineType,
+      entryPath: resolvedEntryPath,
+      runtimeVersion: runtimeVersion.trim() || undefined,
+      runner,
+      args,
+      sandboxHome,
+      bottleName: runner === "bottles" ? (bottleName.trim() || undefined) : undefined,
+      coverFile: coverFile.trim() || undefined,
+    };
+
+    onSave?.({
+      id: game.id,
+      title: title.trim(),
+      engineType: resolvedEngineType,
+      path: path.trim(),
+      runtimeVersion: runtimeVersion.trim() || undefined,
+      settings,
+    });
   }
 
   function isAbsolutePath(value: string): boolean {
@@ -440,52 +428,40 @@ export default function GameSettingsDialog({
             </FormRow>
 
             <FormRow label="启动方式">
-              <Select value={runner ?? "auto"} onValueChange={(v) => {
-                setRunner(v as GameConfig["runner"]);
-                if (v !== "bottles") setUseBottles(false);
+              <Select value={runner} onValueChange={(v) => {
+                if (v !== null) setRunner(v as NonNullable<GameConfig["runner"]>);
               }}>
                 <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">跟随引擎默认</SelectItem>
                   <SelectItem value="native">Linux 原生</SelectItem>
                   <SelectItem value="nwjs">NW.js</SelectItem>
                   <SelectItem value="bottles">Bottles</SelectItem>
+                  {isMkxpzSupported && <SelectItem value="mkxpz">mkxp-z</SelectItem>}
                 </SelectContent>
               </Select>
             </FormRow>
 
-            {(runner === "bottles" || (runner === "auto" && getCategory(engineType) === "other")) && bottlesAvailable && bottlesInstalled && (
-              <>
-                <FormRow label="使用 Bottles">
-                  <Switch
-                    checked={useBottles}
-                    onCheckedChange={(v) => setUseBottles(Boolean(v))}
-                    disabled={bottlesLoading || !bottlesEnabled}
-                  />
-                </FormRow>
-                {useBottles && (
-                  <FormRow label={t("gameSettings.bottlesBottle")}>
-                    <Select
-                      value={bottleName}
-                      onValueChange={(value) => {
-                        if (value !== null) setBottleName(value)
-                      }}
-                      disabled={bottlesLoading || bottlesList.length === 0}
-                    >
-                      <SelectTrigger size="sm">
-                        <SelectValue placeholder={t("maintenance.selectBottle")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {bottlesList.map((name) => (
-                          <SelectItem key={name} value={name}>
-                            {name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormRow>
-                )}
-              </>
+            {runner === "bottles" && bottlesAvailable && bottlesInstalled && (
+              <FormRow label={t("gameSettings.bottlesBottle")}>
+                <Select
+                  value={bottleName}
+                  onValueChange={(value) => {
+                    if (value !== null) setBottleName(value)
+                  }}
+                  disabled={bottlesLoading || !bottlesEnabled || bottlesList.length === 0}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder={t("maintenance.selectBottle")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bottlesList.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
             )}
 
             <FormRow label={t("gameSettings.args")}>
@@ -497,12 +473,14 @@ export default function GameSettingsDialog({
               />
             </FormRow>
 
-            <FormRow label={t("gameSettings.sandboxHome")}>
-              <Switch
-                checked={sandboxHome}
-                onCheckedChange={(v) => setSandboxHome(Boolean(v))}
-              />
-            </FormRow>
+            {(runner === "native" || runner === "nwjs") && (
+              <FormRow label={t("gameSettings.sandboxHome")}>
+                <Switch
+                  checked={sandboxHome}
+                  onCheckedChange={(v) => setSandboxHome(Boolean(v))}
+                />
+              </FormRow>
+            )}
           </div>
         </div>
 

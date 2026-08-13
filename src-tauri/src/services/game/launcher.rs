@@ -13,7 +13,6 @@ struct LaunchOptions {
     entry_path: Option<String>,
     args: Vec<String>,
     sandbox_home: bool,
-    use_bottles: bool,
     bottle_name: Option<String>,
 }
 
@@ -32,10 +31,17 @@ impl LauncherService {
         game: &Game,
         container_root: &Path,
         nwjs_runtime_dir: Option<&Path>,
+        mkxpz_executable: Option<&Path>,
         config: Option<&GameConfig>,
     ) -> Result<LaunchResult, String> {
-        self.launch_game_with_runtimes(game, container_root, nwjs_runtime_dir, config)
-            .await
+        self.launch_game_with_runtimes(
+            game,
+            container_root,
+            nwjs_runtime_dir,
+            mkxpz_executable,
+            config,
+        )
+        .await
     }
 
     /// 启动游戏（完整运行时参数版，支持 NW.js 和 Bottles）
@@ -44,6 +50,7 @@ impl LauncherService {
         game: &Game,
         container_root: &Path,
         nwjs_runtime_dir: Option<&Path>,
+        mkxpz_executable: Option<&Path>,
         config: Option<&GameConfig>,
     ) -> Result<LaunchResult, String> {
         // 检查游戏路径是否存在
@@ -60,15 +67,15 @@ impl LauncherService {
 
         // 根据引擎类型和运行器选择启动策略
         let engine_type = EngineType::from_str(&game.engine_type);
-        let use_nwjs = nwjs_runtime_dir.is_some()
-            && (options.runner == "nwjs"
-                || (options.runner == "auto"
-                    && (matches!(engine_type, EngineType::RpgMakerMV | EngineType::RpgMakerMZ)
-                        || matches!(engine_type, EngineType::Html))));
+        let use_nwjs = nwjs_runtime_dir.is_some() && options.runner == "nwjs";
 
         let child = if use_nwjs {
             self.launch_nwjs_game(game, game_path, container_root, nwjs_runtime_dir, &options)
                 .await?
+        } else if options.runner == "mkxpz" {
+            let executable = mkxpz_executable
+                .ok_or_else(|| "未安装 mkxp-z 运行时，请先在运行时管理中导入".to_string())?;
+            self.launch_mkxpz_game(game, game_path, container_root, executable, &options)?
         } else {
             match engine_type {
                 EngineType::RpgMakerVX | EngineType::RpgMakerVXAce => {
@@ -92,6 +99,58 @@ impl LauncherService {
         Ok(LaunchResult { pid })
     }
 
+    fn launch_mkxpz_game(
+        &self,
+        game: &Game,
+        game_path: &Path,
+        container_root: &Path,
+        executable: &Path,
+        options: &LaunchOptions,
+    ) -> Result<Child, String> {
+        if !matches!(
+            EngineType::from_str(&game.engine_type),
+            EngineType::RpgMakerVX | EngineType::RpgMakerVXAce
+        ) {
+            return Err("mkxp-z 仅支持 RPG Maker VX / VX Ace 游戏".to_string());
+        }
+        if !executable.is_file() {
+            return Err("mkxp-z 运行时损坏，请在运行时管理中重新导入".to_string());
+        }
+
+        let profile_dir = self
+            .file_service
+            .game_profile_dir(container_root, &game.profile_key)
+            .join("mkxpz");
+        std::fs::create_dir_all(&profile_dir)
+            .map_err(|error| format!("无法创建 mkxp-z 配置目录: {error}"))?;
+        let runtime_dir = executable
+            .ancestors()
+            .find(|path| path.file_name().and_then(|name| name.to_str()) == Some("current"))
+            .ok_or_else(|| "mkxp-z 运行时路径无效".to_string())?;
+        let patch = runtime_dir.join("patches").join("compatibility.rb");
+        let mut config = serde_json::Map::new();
+        config.insert(
+            "gameFolder".to_string(),
+            serde_json::Value::String(game_path.to_string_lossy().to_string()),
+        );
+        if patch.is_file() {
+            config.insert(
+                "preloadScript".to_string(),
+                serde_json::json!([patch.to_string_lossy().to_string()]),
+            );
+        }
+        let content = serde_json::to_string_pretty(&config)
+            .map_err(|error| format!("无法生成 mkxp-z 配置: {error}"))?;
+        std::fs::write(profile_dir.join("mkxp.json"), content)
+            .map_err(|error| format!("无法写入 mkxp-z 配置: {error}"))?;
+
+        let mut cmd = Command::new(executable);
+        cmd.current_dir(&profile_dir).env("SRCDIR", &profile_dir);
+        self.apply_args(&mut cmd, options);
+        cmd.spawn()
+            .map_err(|error| format!("启动 mkxp-z 游戏失败: {error}"))
+    }
+
     /// 启动 RPG Maker (VX/VX Ace) 游戏
     async fn launch_rpg_maker_game(
         &self,
@@ -104,7 +163,7 @@ impl LauncherService {
         let exe_path = self.find_rpg_maker_executable(game_path, options.entry_path.as_deref())?;
 
         // 设置工作目录为游戏目录
-        if options.use_bottles {
+        if options.runner == "bottles" {
             #[cfg(not(target_os = "linux"))]
             {
                 return Err("Bottles 仅支持在 Linux 上运行".to_string());
@@ -222,7 +281,7 @@ impl LauncherService {
                 .ok_or_else(|| "未配置入口文件".to_string())?,
         };
 
-        if options.use_bottles {
+        if options.runner == "bottles" {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = entry_path;
@@ -337,16 +396,14 @@ impl LauncherService {
                 },
                 args: config.args.clone(),
                 sandbox_home: config.sandbox_home,
-                use_bottles: config.use_bottles || config.runner == "bottles",
                 bottle_name: config.bottle_name.clone(),
             }
         } else {
             LaunchOptions {
-                runner: "auto".to_string(),
+                runner: "bottles".to_string(),
                 entry_path: None,
                 args: Vec::new(),
                 sandbox_home: true,
-                use_bottles: false,
                 bottle_name: None,
             }
         }

@@ -24,6 +24,8 @@ interface ManagementDialogProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
   onDownloadNwjs?: () => void;
+  onImportMkxpz?: () => void;
+  onOpenMkxpzBuilds?: () => void;
   onUpdateEngine?: (engine: EngineDto) => void;
   onRemoveEngine?: (engine: EngineDto) => void;
 }
@@ -32,6 +34,8 @@ export default function ManagementDialog({
   open,
   onOpenChange,
   onDownloadNwjs,
+  onImportMkxpz,
+  onOpenMkxpzBuilds,
   onUpdateEngine,
   onRemoveEngine,
 }: ManagementDialogProps) {
@@ -47,6 +51,7 @@ export default function ManagementDialog({
   const bottlesInstallCommand = 'flatpak install flathub com.usebottles.bottles';
 
   const nwjsEngines = engines.filter(e => e.engineType === "nwjs");
+  const mkxpzEngines = engines.filter(e => e.engineType === "mkxpz");
 
   async function fetchEngines() {
     setLoading(true);
@@ -145,7 +150,9 @@ export default function ManagementDialog({
             <Icon icon={icon} className="h-4 w-4 shrink-0" />
             <span className="text-sm font-medium truncate">{name}</span>
             {installed && (
-              <span className="text-xs text-muted-foreground">v{latest.version}</span>
+              <span className="text-xs text-muted-foreground">
+                {name === "mkxp-z" ? latest.version : `v${latest.version}`}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -196,6 +203,22 @@ export default function ManagementDialog({
               onUpdate={onUpdateEngine}
               onRemove={onRemoveEngine}
             />
+
+            <RuntimeRow
+              icon="ri:gamepad-line"
+              name="mkxp-z"
+              engines={mkxpzEngines}
+              onInstall={onImportMkxpz}
+              onUpdate={() => onImportMkxpz?.()}
+              onRemove={onRemoveEngine}
+            />
+
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>导入与本机架构匹配的 Ubuntu ZIP。</span>
+              <Button variant="ghost" size="xs" onClick={onOpenMkxpzBuilds}>
+                构建页面
+              </Button>
+            </div>
 
           </div>
 

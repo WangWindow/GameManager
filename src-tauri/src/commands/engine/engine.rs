@@ -58,6 +58,13 @@ pub async fn delete_engine(
 
     if let Some(engine) = engine {
         if let Ok(app_data_dir) = app.path().app_data_dir() {
+            if engine.engine_type == "mkxpz" {
+                let runtime_root = app_data_dir.join("runtimes").join("mkxpz");
+                if runtime_root.is_dir() {
+                    let _ = std::fs::remove_dir_all(runtime_root);
+                }
+                return service.delete_engine(&id).await;
+            }
             let engine_path =
                 crate::utils::path::canonicalize(std::path::Path::new(&engine.engine_path));
             if crate::utils::path::is_within(&engine_path, &app_data_dir) {
@@ -65,7 +72,12 @@ pub async fn delete_engine(
                     let _ = std::fs::remove_dir_all(&engine_path);
                     // 尝试清理空父目录
                     if let Some(parent) = engine_path.parent() {
-                        if parent.is_dir() && parent.read_dir().map(|mut i| i.next().is_none()).unwrap_or(false) {
+                        if parent.is_dir()
+                            && parent
+                                .read_dir()
+                                .map(|mut i| i.next().is_none())
+                                .unwrap_or(false)
+                        {
                             let _ = std::fs::remove_dir(parent);
                         }
                     }

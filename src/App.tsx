@@ -91,7 +91,13 @@ export default function App() {
     closeGameSettings: gameSettingsDialog.close,
   });
 
-  const { handleDownloadNwjs, handleUpdateEngine, handleRemoveEngine } =
+  const {
+    handleDownloadNwjs,
+    handleUpdateEngine,
+    handleRemoveEngine,
+    handleImportMkxpz,
+    handleOpenMkxpzBuilds,
+  } =
     useMaintenanceActions({ updateTask });
 
   // 过滤后的游戏列表
@@ -226,6 +232,8 @@ export default function App() {
         open={manageDialog.isOpen}
         onOpenChange={manageDialog.setOpen}
         onDownloadNwjs={handleDownloadNwjs}
+        onImportMkxpz={handleImportMkxpz}
+        onOpenMkxpzBuilds={handleOpenMkxpzBuilds}
         onUpdateEngine={handleUpdateEngine}
         onRemoveEngine={handleRemoveEngine}
       />

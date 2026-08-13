@@ -18,6 +18,7 @@ import type {
   SetContainerRootInput,
   NwjsStableInfo,
   NwjsInstallResult,
+  MkxpzImportResult,
   CleanupResult,
   Capabilities,
   IntegrationSettingsInput,
@@ -251,6 +252,11 @@ export async function getNwjsStableInfo(): Promise<NwjsStableInfo> {
  */
 export async function downloadNwjsStable(flavor: 'normal' | 'sdk'): Promise<NwjsInstallResult> {
   return invoke<NwjsInstallResult>('download_nwjs_stable', { flavor })
+}
+
+/** 导入手动下载的 mkxp-z GitHub Actions ZIP。 */
+export async function importMkxpzArchive(archivePath: string): Promise<MkxpzImportResult> {
+  return invoke<MkxpzImportResult>('import_mkxpz_archive', { archivePath })
 }
 
 /**

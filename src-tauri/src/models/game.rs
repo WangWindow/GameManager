@@ -70,7 +70,8 @@ pub struct GameConfig {
     pub entry_path: String,
     /// 运行时版本
     pub runtime_version: Option<String>,
-    /// 启动运行器：auto | native | nwjs | bottles。
+    /// 启动运行器：native | nwjs | bottles | mkxpz | external。
+    /// `auto` 仅用于读取旧配置时的一次性迁移，绝不写入新配置。
     #[serde(default = "default_runner")]
     pub runner: String,
     /// 启动参数
@@ -79,9 +80,6 @@ pub struct GameConfig {
     /// 是否启用沙盒主目录
     #[serde(default = "default_true")]
     pub sandbox_home: bool,
-    /// 是否使用 Bottles
-    #[serde(default)]
-    pub use_bottles: bool,
     /// Bottles bottle 名称
     #[serde(default)]
     pub bottle_name: Option<String>,
@@ -107,7 +105,6 @@ impl Default for GameConfig {
             runner: default_runner(),
             args: Vec::new(),
             sandbox_home: true,
-            use_bottles: false,
             bottle_name: None,
             cover_file: None,
         }

@@ -220,6 +220,7 @@ pub fn run() {
             commands::set_integration_settings,
             commands::get_nwjs_stable_info,
             commands::download_nwjs_stable,
+            commands::import_mkxpz_archive,
             commands::cleanup_unused_containers,
         ])
         .run(tauri::generate_context!())
