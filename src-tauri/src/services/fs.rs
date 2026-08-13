@@ -8,8 +8,6 @@ use std::fs::File;
 use std::path::{Component, Path, PathBuf};
 
 use crate::utils::path::ensure_dir;
-use pelite::pe32::Pe as _;
-use pelite::pe64::Pe as _;
 
 // ── FileService ──────────────────────────────────────────────────────────────
 
@@ -331,51 +329,20 @@ impl FileService {
             return None;
         }
 
-        let file = match pelite::FileMap::open(exe_path) {
-            Ok(f) => f,
-            Err(e) => {
+        match icoextract_rs::IconExtractor::from_path(exe_path)
+            .and_then(|extractor| extractor.icon_by_index(0))
+            .and_then(|icon| icon.to_ico_bytes())
+        {
+            Ok(icon) => Some(icon),
+            Err(error) => {
                 tracing::debug!(
                     path = %exe_path.display(),
-                    error = %e,
-                    "无法打开 PE 文件"
+                    error = %error,
+                    "无法从 PE 文件提取图标"
                 );
-                return None;
-            }
-        };
-
-        let bytes = file.as_ref();
-
-        // 尝试解析为 PE64
-        if let Ok(pe) = pelite::pe64::PeFile::from_bytes(bytes) {
-            if let Ok(resources) = pe.resources() {
-                if let Some(icon) = self.extract_pe_icon_from_resources(resources) {
-                    return Some(icon);
-                }
+                None
             }
         }
-
-        // 尝试解析为 PE32
-        if let Ok(pe) = pelite::pe32::PeFile::from_bytes(bytes) {
-            if let Ok(resources) = pe.resources() {
-                if let Some(icon) = self.extract_pe_icon_from_resources(resources) {
-                    return Some(icon);
-                }
-            }
-        }
-
-        tracing::debug!(path = %exe_path.display(), "PE 文件中未找到图标资源");
-        None
-    }
-
-    fn extract_pe_icon_from_resources(
-        &self,
-        res: pelite::resources::Resources<'_>,
-    ) -> Option<Vec<u8>> {
-        let mut icons = res.icons().filter_map(Result::ok);
-        let (_name, group) = icons.next()?;
-        let mut out = Vec::new();
-        group.write(&mut out).ok()?;
-        Some(out)
     }
 
     /// 读取游戏配置
