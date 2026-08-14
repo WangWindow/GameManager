@@ -8,8 +8,16 @@ pub enum CoreError {
     DataDirectoryUnavailable,
     #[error("invalid application path: {0}")]
     InvalidPath(String),
+    #[error("database error: {0}")]
+    Database(String),
     #[error(transparent)]
     Io(#[from] io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, CoreError>;
+
+impl CoreError {
+    pub fn database(error: impl std::fmt::Display) -> Self {
+        Self::Database(error.to_string())
+    }
+}

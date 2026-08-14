@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod db;
 mod error;
 mod models;
 mod paths;
@@ -7,6 +8,7 @@ mod paths;
 /// Stable application identifier used to locate v0.9 user data.
 pub const APP_ID: &str = "io.choco.gamemanager";
 
+pub use db::Database;
 pub use error::{CoreError, Result};
 pub use models::{
     AppSettings, EngineRecord, GameConfig, GameRecord, GameSummary, GameViewMode, Runner,
