@@ -5,6 +5,7 @@ mod engines;
 mod error;
 mod models;
 mod paths;
+mod profiles;
 
 /// Stable application identifier used to locate v0.9 user data.
 pub const APP_ID: &str = "io.choco.gamemanager";
@@ -22,3 +23,4 @@ pub use models::{
     SETTING_UI_PREFERENCES, ThemeMode, UiPreferences,
 };
 pub use paths::AppPaths;
+pub use profiles::{CoverResolver, IconAsset, IconSource, PeIconSource, ProfileStore};

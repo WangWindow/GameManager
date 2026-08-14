@@ -11,6 +11,8 @@ path = "src/lib.rs"
 [dependencies]
 directories.workspace = true
 glob.workspace = true
+icoextract_rs.workspace = true
+image.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 toasty.workspace = true

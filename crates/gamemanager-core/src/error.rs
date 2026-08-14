@@ -12,6 +12,10 @@ pub enum CoreError {
     Database(String),
     #[error("engine error: {0}")]
     Engine(String),
+    #[error("configuration error: {0}")]
+    Configuration(String),
+    #[error("cover error: {0}")]
+    Cover(String),
     #[error(transparent)]
     Io(#[from] io::Error),
 }
