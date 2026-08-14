@@ -10,12 +10,14 @@ license = "GPL-3.0"
 
 [workspace.dependencies]
 directories = "6"
+glob = "0.3"
 iced = { version = "0.14", features = ["tokio", "image-without-codecs", "svg"] }
 gamemanager-core = { path = "crates/gamemanager-core" }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toasty = { version = "0.9", features = ["sqlite"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+toml = "1"
 
 [profile.dev]
 incremental = true

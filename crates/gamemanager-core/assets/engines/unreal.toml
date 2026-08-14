@@ -1,0 +1,35 @@
+[meta]
+id = "unreal"
+name = "Unreal Engine"
+category = "other"
+icon = "ri:gamepad-line"
+priority = 6
+description = "Unreal Engine 打包游戏（UE4/UE5）。"
+
+[detection]
+min_score = 0
+
+[[detection.required]]
+type = "glob_match"
+pattern = "Engine"
+
+[[detection.required]]
+type = "glob_match_recursive"
+pattern = "*Binaries"
+
+[[detection.forbidden]]
+type = "file_exists"
+path = "UnrealEditor.exe"
+
+[[detection.optional]]
+type = "glob_match"
+pattern = "*.uproject"
+weight = 3
+
+[launch]
+strategy = "bottles"
+entry_patterns = ["*/Binaries/Win64/*-Shipping.exe", "*.exe", "*/Binaries/Win64/*.exe"]
+exclude_patterns = ["CrashReportClient*.exe", "UE4PrereqSetup*.exe", "UnrealCEFSubProcess*.exe"]
+args = []
+sandbox_home = false
+preserve_dirs = ["Saved/SaveGames"]

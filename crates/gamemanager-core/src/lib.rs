@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod db;
+mod engines;
 mod error;
 mod models;
 mod paths;
@@ -9,6 +10,11 @@ mod paths;
 pub const APP_ID: &str = "io.choco.gamemanager";
 
 pub use db::Database;
+pub use engines::{
+    DetectionConfig, DetectionContext, DetectionMatch, DetectionRuleDefinition, EngineDetail,
+    EngineMeta, EngineProfile, EngineRegistry, EngineSummary, FsDetectionContext, LaunchConfig,
+    RegistryReport, RegistryWarning,
+};
 pub use error::{CoreError, Result};
 pub use models::{
     AppSettings, EngineRecord, GameConfig, GameRecord, GameSummary, GameViewMode, Runner,

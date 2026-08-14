@@ -1,0 +1,50 @@
+[meta]
+id = "rpgmakervx"
+name = "RPG Maker VX / VX Ace"
+category = "bottles"
+icon = "ri:window-line"
+priority = 3
+
+[detection]
+min_score = 3
+
+[[detection.required]]
+type = "file_exists"
+path = "Game.ini"
+
+[[detection.optional]]
+type = "glob_match"
+pattern = "RGSS1*.dll"
+weight = 3
+
+[[detection.optional]]
+type = "glob_match"
+pattern = "RGSS2*.dll"
+weight = 3
+
+[[detection.optional]]
+type = "glob_match"
+pattern = "RGSS3*.dll"
+weight = 3
+
+[[detection.optional]]
+type = "file_exists"
+path = "Game.exe"
+weight = 2
+
+
+[[detection.optional]]
+type = "has_extension"
+ext = "rvdata"
+weight = 2
+
+[[detection.optional]]
+type = "has_extension"
+ext = "rvdata2"
+weight = 2
+
+[launch]
+strategy = "bottles"
+entry_patterns = ["@native", "Game.exe"]
+args = []
+sandbox_home = true

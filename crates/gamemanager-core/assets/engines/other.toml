@@ -1,0 +1,30 @@
+[meta]
+id = "other"
+name = "Other"
+category = "other"
+icon = "ri:question-line"
+priority = 99
+description = "通用引擎类型，用于无法自动识别的游戏。仅在有可执行文件时检测。"
+
+[detection]
+min_score = 1
+
+[[detection.optional]]
+type = "has_extension"
+ext = "exe"
+weight = 1
+
+[[detection.optional]]
+type = "has_extension"
+ext = "sh"
+weight = 1
+
+[[detection.optional]]
+type = "has_native_executable"
+weight = 2
+
+[launch]
+strategy = "bottles"
+entry_patterns = ["@native", "*.sh", "Game.exe", "*.exe"]
+args = []
+sandbox_home = false

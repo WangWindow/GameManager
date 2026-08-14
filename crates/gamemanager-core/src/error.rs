@@ -10,6 +10,8 @@ pub enum CoreError {
     InvalidPath(String),
     #[error("database error: {0}")]
     Database(String),
+    #[error("engine error: {0}")]
+    Engine(String),
     #[error(transparent)]
     Io(#[from] io::Error),
 }
