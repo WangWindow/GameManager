@@ -147,6 +147,7 @@ impl LauncherService {
 
         let mut cmd = Command::new(executable);
         cmd.current_dir(&profile_dir).env("SRCDIR", &profile_dir);
+        self.apply_home_sandbox(&mut cmd, container_root, &game.profile_key, options);
         self.apply_args(&mut cmd, options);
         cmd.spawn()
             .map_err(|error| format!("启动 mkxp-z 游戏失败: {error}"))
