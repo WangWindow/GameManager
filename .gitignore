@@ -4,7 +4,6 @@
 .omo
 
 docs/superpowers
-tests
 
 .env
 .DS_Store

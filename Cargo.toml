@@ -9,8 +9,11 @@ edition = "2024"
 license = "GPL-3.0"
 
 [workspace.dependencies]
+directories = "6"
 iced = { version = "0.14", features = ["tokio", "image-without-codecs", "svg"] }
 gamemanager-core = { path = "crates/gamemanager-core" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
 
 [profile.dev]
 incremental = true

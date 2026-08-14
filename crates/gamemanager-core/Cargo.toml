@@ -7,3 +7,8 @@ license.workspace = true
 [lib]
 name = "gamemanager_core"
 path = "src/lib.rs"
+
+[dependencies]
+directories.workspace = true
+serde.workspace = true
+thiserror.workspace = true
