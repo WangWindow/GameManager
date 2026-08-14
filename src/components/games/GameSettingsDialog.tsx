@@ -473,7 +473,7 @@ export default function GameSettingsDialog({
               />
             </FormRow>
 
-            {(runner === "native" || runner === "nwjs") && (
+            {(runner === "native" || runner === "nwjs" || runner === "mkxpz") && (
               <FormRow label={t("gameSettings.sandboxHome")}>
                 <Switch
                   checked={sandboxHome}
