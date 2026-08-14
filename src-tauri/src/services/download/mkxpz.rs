@@ -7,7 +7,20 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 const PATCH_FILE: &str = "compatibility.rb";
-const DEFAULT_PATCH: &str = "# Global mkxp-z compatibility patch.\n# It is loaded before every game launched by GameManager.\n";
+const DEFAULT_PATCH: &str = r#"# Global mkxp-z compatibility patch.
+# It is loaded before every game launched by GameManager.
+if defined?($RGSS_SCRIPTS) && $RGSS_SCRIPTS
+  $RGSS_SCRIPTS.delete_if do |script|
+    name = script[1].to_s.downcase
+    if name == "steam_acheivement" || name == "steam_achievement"
+      puts "[mkxp patch] Disabled incompatible script: #{script[1]}"
+      true
+    else
+      false
+    end
+  end
+end
+"#;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,7 +62,7 @@ pub fn import_archive(app: &AppHandle, archive_path: &Path) -> Result<MkxpzImpor
         mark_executable(&executable)?;
 
         preserve_patches(&current_dir, &staging_dir)?;
-        ensure_default_patch(&staging_dir)?;
+        ensure_compatibility_patch(&staging_dir)?;
 
         if current_dir.exists() {
             fs::rename(&current_dir, &previous_dir)
@@ -188,16 +201,17 @@ fn preserve_patches(current_dir: &Path, staging_dir: &Path) -> Result<(), String
     copy_dir(&current_patches, &staging_dir.join("patches"))
 }
 
-fn ensure_default_patch(staging_dir: &Path) -> Result<(), String> {
-    let patch_path = staging_dir.join("patches").join(PATCH_FILE);
-    if patch_path.exists() {
-        return Ok(());
-    }
-
+pub fn ensure_compatibility_patch(runtime_dir: &Path) -> Result<(), String> {
+    let patch_path = runtime_dir.join("patches").join(PATCH_FILE);
     let parent = patch_path
         .parent()
         .ok_or_else(|| "无法创建 mkxp-z 补丁目录".to_string())?;
     fs::create_dir_all(parent).map_err(|error| format!("无法创建 mkxp-z 补丁目录: {error}"))?;
+
+    if patch_path.exists() {
+        return Ok(());
+    }
+
     fs::write(&patch_path, DEFAULT_PATCH).map_err(|error| format!("无法创建兼容补丁: {error}"))
 }
 

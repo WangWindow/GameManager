@@ -127,6 +127,7 @@ impl LauncherService {
             .ancestors()
             .find(|path| path.file_name().and_then(|name| name.to_str()) == Some("current"))
             .ok_or_else(|| "mkxp-z 运行时路径无效".to_string())?;
+        crate::services::download::mkxpz::ensure_compatibility_patch(runtime_dir)?;
         let patch = runtime_dir.join("patches").join("compatibility.rb");
         let mut config = serde_json::Map::new();
         config.insert(
