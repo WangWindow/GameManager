@@ -1,0 +1,13 @@
+[package]
+name = "gamemanager-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "gamemanager"
+path = "src/main.rs"
+
+[dependencies]
+gamemanager-core.workspace = true
+iced.workspace = true

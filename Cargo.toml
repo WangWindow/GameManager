@@ -1,0 +1,23 @@
+[workspace]
+members = ["crates/gamemanager-core", "crates/gamemanager-desktop"]
+default-members = ["crates/gamemanager-desktop"]
+resolver = "3"
+
+[workspace.package]
+version = "0.10.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[workspace.dependencies]
+iced = { version = "0.14", features = ["tokio", "image-without-codecs", "svg"] }
+gamemanager-core = { path = "crates/gamemanager-core" }
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
