@@ -1,6 +1,10 @@
+use std::sync::Arc;
+
 use iced::window::Direction;
 
-use gamemanager_core::ThemeMode;
+use gamemanager_core::{BootstrapSnapshot, GameManagerCore, ThemeMode};
+
+pub use crate::state::LibraryMessage;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SystemTheme {
@@ -26,9 +30,11 @@ pub enum WindowMessage {
     Focused(bool),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Message {
     ThemeModeChanged(ThemeMode),
     SystemThemeChanged(SystemTheme),
     Window(WindowMessage),
+    Library(LibraryMessage),
+    BootstrapFinished(Result<(Arc<GameManagerCore>, BootstrapSnapshot), String>),
 }

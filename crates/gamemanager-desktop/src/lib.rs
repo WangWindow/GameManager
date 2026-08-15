@@ -6,5 +6,6 @@ pub mod message;
 pub mod platform;
 pub mod shell;
 pub mod state;
+pub mod views;
 
 pub use app::DesktopApp;
