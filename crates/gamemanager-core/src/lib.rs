@@ -7,8 +7,10 @@ mod game_library;
 mod integrations;
 mod launcher;
 mod models;
+mod operation;
 mod paths;
 mod profiles;
+mod runtime;
 
 /// Stable application identifier used to locate v0.9 user data.
 pub const APP_ID: &str = "io.choco.gamemanager";
@@ -31,5 +33,10 @@ pub use models::{
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,
     SETTING_UI_PREFERENCES, ThemeMode, UiPreferences,
 };
+pub use operation::{Operation, OperationId, OperationOutcome, OperationProgress, OperationStage};
 pub use paths::AppPaths;
 pub use profiles::{CoverResolver, IconAsset, IconSource, PeIconSource, ProfileStore};
+pub use runtime::{
+    HttpClient, MkxpzInstallResult, NwjsFlavor, NwjsInstallResult, NwjsStableInfo, RuntimeManager,
+    build_nwjs_download_url, current_nwjs_target, ensure_compatibility_patch,
+};
