@@ -64,6 +64,31 @@ impl ProfileStore {
         std::fs::write(self.config_path(profile_key), content)?;
         Ok(())
     }
+
+    pub fn rename(&self, old_key: &str, new_key: &str) -> Result<()> {
+        validate_profile_key(old_key)?;
+        validate_profile_key(new_key)?;
+        if old_key == new_key {
+            return Ok(());
+        }
+        let source = self.profile_dir(old_key);
+        if !source.exists() {
+            return Ok(());
+        }
+        let target = self.profile_dir(new_key);
+        if target.exists() {
+            return Err(CoreError::Configuration(format!(
+                "profile already exists: {new_key}"
+            )));
+        }
+        std::fs::create_dir_all(
+            target
+                .parent()
+                .ok_or_else(|| CoreError::InvalidPath(target.display().to_string()))?,
+        )?;
+        std::fs::rename(source, target)?;
+        Ok(())
+    }
 }
 
 fn validate_profile_key(profile_key: &str) -> Result<()> {

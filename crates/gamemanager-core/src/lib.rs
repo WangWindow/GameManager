@@ -3,6 +3,7 @@
 mod db;
 mod engines;
 mod error;
+mod game_library;
 mod models;
 mod paths;
 mod profiles;
@@ -17,6 +18,10 @@ pub use engines::{
     RegistryReport, RegistryWarning,
 };
 pub use error::{CoreError, Result};
+pub use game_library::{
+    EntryPoint, GameLibraryService, ImportRequest, ScanPlan, ScanPlanner, ScanRequest, ScanResult,
+    UpdateGameRequest,
+};
 pub use models::{
     AppSettings, EngineRecord, GameConfig, GameRecord, GameSummary, GameViewMode, Runner,
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,

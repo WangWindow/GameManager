@@ -96,6 +96,7 @@ pub struct GameRecord {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GameSummary {
     pub id: String,
+    pub profile_key: String,
     pub title: String,
     pub engine_type: String,
     pub game_path: String,
@@ -111,6 +112,7 @@ impl From<&GameRecord> for GameSummary {
     fn from(game: &GameRecord) -> Self {
         Self {
             id: game.id.clone(),
+            profile_key: game.profile_key.clone(),
             title: game.title.clone(),
             engine_type: game.engine_type.clone(),
             game_path: game.game_path.clone(),

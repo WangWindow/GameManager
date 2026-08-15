@@ -20,6 +20,7 @@ thiserror = "2"
 toasty = { version = "0.9", features = ["sqlite"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 toml = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [profile.dev]
 incremental = true
