@@ -1,4 +1,4 @@
-use gamemanager_core::{AppPaths, GameManagerCore};
+use gamemanager_core::{AppPaths, GameManagerCore, ImportRequest, OperationProgress, ScanRequest};
 use iced::{
     Element, Length, Task, Theme,
     widget::{button, column, container, row, text},
@@ -7,16 +7,19 @@ use iced::{
 use std::sync::Arc;
 
 use crate::{
+    components::Modal,
     components::action_button,
     message::{Message, WindowAction, WindowMessage},
-    state::{DialogState, LibraryState, ShellState},
-    views::library_view,
+    platform::DesktopDialog,
+    state::{DialogState, LibraryState, OperationState, ShellState},
+    views::{import_view, library_view, scan_view},
 };
 
 pub struct DesktopApp {
     pub shell: ShellState,
     pub dialogs: DialogState,
     pub library: LibraryState,
+    pub operations: OperationState,
     pub core: Option<Arc<GameManagerCore>>,
     pub bootstrap_error: Option<String>,
 }
@@ -27,6 +30,7 @@ impl DesktopApp {
             shell: ShellState::default(),
             dialogs: DialogState::default(),
             library: LibraryState::default(),
+            operations: OperationState::default(),
             core: None,
             bootstrap_error: None,
         }
@@ -70,12 +74,122 @@ impl DesktopApp {
                 }
                 Err(error) => self.bootstrap_error = Some(error),
             },
+            Message::OpenImport => {
+                self.dialogs.import.open = true;
+                self.dialogs.import.error = None;
+            }
+            Message::CloseImport => self.dialogs.import.open = false,
+            Message::PickImportEntry => {
+                return Task::perform(DesktopDialog.pick_file(), Message::ImportEntryPicked);
+            }
+            Message::ImportEntryPicked(path) => {
+                if let Some(path) = path {
+                    self.dialogs.import.set_entry_path(path);
+                }
+            }
+            Message::SubmitImport => {
+                let Some(core) = self.core.clone() else {
+                    self.dialogs.import.error = Some("应用尚未完成初始化".to_owned());
+                    return Task::none();
+                };
+                let Some(entry) = self.dialogs.import.entry_path.clone() else {
+                    return Task::none();
+                };
+                self.dialogs.import.submitting = true;
+                return Task::perform(
+                    async move {
+                        core.import_game(ImportRequest::from_entry(entry))
+                            .await
+                            .map_err(|error| error.to_string())
+                    },
+                    Message::ImportFinished,
+                );
+            }
+            Message::ImportFinished(result) => {
+                self.dialogs.import.submitting = false;
+                match result {
+                    Ok(game) => {
+                        self.library.apply_game(game);
+                        self.dialogs.import.open = false;
+                    }
+                    Err(error) => self.dialogs.import.error = Some(error),
+                }
+            }
+            Message::OpenScan => {
+                self.dialogs.scan = Some(crate::state::ScanDialogState::open(
+                    std::path::PathBuf::new(),
+                    3,
+                ));
+            }
+            Message::CloseScan => self.dialogs.scan = None,
+            Message::PickScanRoot => {
+                return Task::perform(DesktopDialog.pick_directory(), Message::ScanRootPicked);
+            }
+            Message::ScanRootPicked(path) => {
+                if let Some(path) = path
+                    && let Some(scan) = self.dialogs.scan.as_mut()
+                {
+                    scan.root = path;
+                    scan.error = None;
+                }
+            }
+            Message::SubmitScan => {
+                let Some(core) = self.core.clone() else {
+                    if let Some(scan) = self.dialogs.scan.as_mut() {
+                        scan.error = Some("应用尚未完成初始化".to_owned());
+                    }
+                    return Task::none();
+                };
+                let Some(scan) = self.dialogs.scan.as_mut() else {
+                    return Task::none();
+                };
+                if !scan.root.is_dir() {
+                    scan.error = Some("请选择有效的扫描目录".to_owned());
+                    return Task::none();
+                }
+                let operation = core.scan(ScanRequest::new(scan.root.clone(), scan.max_depth));
+                let operation_id = operation.id();
+                scan.set_operation(operation_id);
+                let progress = operation.progress();
+                let future = operation.into_future();
+                return Task::batch([
+                    Task::run(progress, Message::ScanProgress),
+                    Task::perform(future, |result| {
+                        Message::ScanFinished(result.map_err(|error| error.to_string()))
+                    }),
+                ]);
+            }
+            Message::ScanProgress(progress) => {
+                self.apply_scan_progress(progress);
+            }
+            Message::ScanFinished(result) => match result {
+                Ok(_) => {
+                    self.dialogs.scan = None;
+                    if let Some(core) = self.core.clone() {
+                        return Task::perform(
+                            async move {
+                                let snapshot =
+                                    core.bootstrap().await.map_err(|error| error.to_string())?;
+                                Ok::<_, String>((core, snapshot))
+                            },
+                            Message::BootstrapFinished,
+                        );
+                    }
+                }
+                Err(error) => {
+                    if let Some(scan) = self.dialogs.scan.as_mut() {
+                        scan.error = Some(error);
+                    }
+                }
+            },
         }
         Task::none()
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         let controls = row![
+            action_button("＋", Message::OpenImport),
+            action_button("⌕", Message::OpenScan),
             action_button(
                 "—",
                 Message::Window(WindowMessage::Action(WindowAction::Minimize))
@@ -94,7 +208,7 @@ impl DesktopApp {
             .width(Length::Fill)
             .padding(16)
             .on_press(Message::Window(WindowMessage::Action(WindowAction::Drag)));
-        container(column![
+        let base: Element<'_, Message> = container(column![
             row![title, controls].height(Length::Shrink),
             text("游戏库").size(30),
             self.bootstrap_error
@@ -106,7 +220,17 @@ impl DesktopApp {
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(16)
-        .into()
+        .into();
+        let with_import = if self.dialogs.import.open {
+            Modal::new(import_view(&self.dialogs.import)).overlay(base)
+        } else {
+            base
+        };
+        if let Some(scan) = self.dialogs.scan.as_ref() {
+            Modal::new(scan_view(scan)).overlay(with_import)
+        } else {
+            with_import
+        }
     }
 
     fn theme(&self) -> Theme {
@@ -119,6 +243,15 @@ impl DesktopApp {
 
     pub fn update_for_test(&mut self, message: Message) {
         let _ = self.update(message);
+    }
+
+    fn apply_scan_progress(&mut self, progress: OperationProgress) {
+        self.operations.apply(progress.clone());
+        if let Some(scan) = self.dialogs.scan.as_mut()
+            && scan.operation_id == Some(progress.id)
+        {
+            scan.apply_progress(progress.stage, progress.percent);
+        }
     }
 }
 

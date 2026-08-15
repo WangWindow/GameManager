@@ -4,9 +4,10 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     AppPaths, AppSettings, CoreError, Database, EngineDetail, EngineRecord, EngineRegistry,
-    EngineSummary, GameLibraryService, GameSummary, ProfileStore, RegistryWarning, Result,
-    RuntimeManager, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT, SETTING_ENGINE_ENABLED,
-    SETTING_UI_PREFERENCES, UiPreferences,
+    EngineSummary, GameLibraryService, GameSummary, ImportRequest, Operation, ProfileStore,
+    RegistryWarning, Result, RuntimeManager, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,
+    SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ScanPlanner, ScanRequest, ScanResult,
+    UiPreferences,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -110,6 +111,38 @@ impl GameManagerCore {
                     .is_some_and(|value| value == "true"),
             }],
             runtimes,
+        })
+    }
+
+    pub async fn import_game(&self, request: ImportRequest) -> Result<GameSummary> {
+        self.library.import_game(request).await
+    }
+
+    pub fn scan(&self, request: ScanRequest) -> Operation<ScanResult> {
+        let planner = ScanPlanner::new(self.registry.clone());
+        let library = self.library.clone();
+        Operation::from_future("scan", async move {
+            let plan = planner.plan(request)?;
+            let existing = library.list().await?;
+            let mut imported = Vec::new();
+            for candidate in &plan.candidates {
+                let canonical =
+                    std::fs::canonicalize(candidate).unwrap_or_else(|_| candidate.to_path_buf());
+                if existing
+                    .iter()
+                    .any(|game| std::path::Path::new(&game.game_path) == canonical)
+                {
+                    continue;
+                }
+                library
+                    .import_game(ImportRequest::from_entry(candidate))
+                    .await?;
+                imported.push(candidate.clone());
+            }
+            Ok(ScanResult {
+                candidates: imported,
+                scanned_directories: plan.scanned_directories,
+            })
         })
     }
 
