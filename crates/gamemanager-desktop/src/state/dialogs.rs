@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use gamemanager_core::OperationId;
 
+use super::GameSettingsState;
+
 #[derive(Clone, Debug, Default)]
 pub struct ImportDialogState {
     pub open: bool,
@@ -60,4 +62,5 @@ impl ScanDialogState {
 pub struct DialogState {
     pub import: ImportDialogState,
     pub scan: Option<ScanDialogState>,
+    pub settings: Option<GameSettingsState>,
 }

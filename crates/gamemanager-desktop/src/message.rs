@@ -3,7 +3,8 @@ use std::sync::Arc;
 use iced::window::Direction;
 
 use gamemanager_core::{
-    BootstrapSnapshot, GameManagerCore, GameSummary, OperationProgress, ScanResult, ThemeMode,
+    BootstrapSnapshot, GameConfig, GameManagerCore, GameSummary, OperationProgress, Runner,
+    ScanResult, ThemeMode,
 };
 
 pub use crate::state::LibraryMessage;
@@ -52,4 +53,14 @@ pub enum Message {
     SubmitScan,
     ScanProgress(OperationProgress),
     ScanFinished(Result<ScanResult, String>),
+    OpenGameSettings(String),
+    CloseGameSettings,
+    GameSettingsLoaded(Result<(GameSummary, GameConfig), String>),
+    GameSettingsTitleChanged(String),
+    GameSettingsEntryChanged(String),
+    GameSettingsRunnerChanged(Runner),
+    GameSettingsSandboxChanged(bool),
+    GameSettingsBottleChanged(String),
+    SaveGameSettings,
+    GameSettingsFinished(Result<GameSummary, String>),
 }

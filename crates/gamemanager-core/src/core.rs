@@ -4,10 +4,10 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     AppPaths, AppSettings, CoreError, Database, EngineDetail, EngineRecord, EngineRegistry,
-    EngineSummary, GameLibraryService, GameSummary, ImportRequest, Operation, ProfileStore,
-    RegistryWarning, Result, RuntimeManager, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,
-    SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ScanPlanner, ScanRequest, ScanResult,
-    UiPreferences,
+    EngineSummary, GameConfig, GameLibraryService, GameSummary, ImportRequest, Operation,
+    ProfileStore, RegistryWarning, Result, RuntimeManager, SETTING_BOTTLES_ENABLED,
+    SETTING_CONTAINER_ROOT, SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ScanPlanner,
+    ScanRequest, ScanResult, UiPreferences,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -116,6 +116,21 @@ impl GameManagerCore {
 
     pub async fn import_game(&self, request: ImportRequest) -> Result<GameSummary> {
         self.library.import_game(request).await
+    }
+
+    pub async fn game_config(&self, profile_key: &str) -> Result<GameConfig> {
+        self.profiles.load(profile_key)
+    }
+
+    pub async fn save_game_settings(
+        &self,
+        game_id: &str,
+        request: crate::UpdateGameRequest,
+        config: &GameConfig,
+    ) -> Result<GameSummary> {
+        let game = self.library.update_game(game_id, request).await?;
+        self.profiles.save(&game.profile_key, config)?;
+        Ok(game)
     }
 
     pub fn scan(&self, request: ScanRequest) -> Operation<ScanResult> {

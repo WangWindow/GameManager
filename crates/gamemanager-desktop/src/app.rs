@@ -11,8 +11,8 @@ use crate::{
     components::action_button,
     message::{Message, WindowAction, WindowMessage},
     platform::DesktopDialog,
-    state::{DialogState, LibraryState, OperationState, ShellState},
-    views::{import_view, library_view, scan_view},
+    state::{DialogState, GameSettingsState, LibraryState, OperationState, ShellState},
+    views::{game_settings_view, import_view, library_view, scan_view},
 };
 
 pub struct DesktopApp {
@@ -182,6 +182,98 @@ impl DesktopApp {
                     }
                 }
             },
+            Message::OpenGameSettings(game_id) => {
+                let Some(core) = self.core.clone() else {
+                    return Task::none();
+                };
+                let Some(game) = self
+                    .library
+                    .games()
+                    .iter()
+                    .find(|game| game.id == game_id)
+                    .cloned()
+                else {
+                    return Task::none();
+                };
+                return Task::perform(
+                    async move {
+                        let config = core
+                            .game_config(&game.profile_key)
+                            .await
+                            .map_err(|error| error.to_string())?;
+                        Ok::<_, String>((game, config))
+                    },
+                    Message::GameSettingsLoaded,
+                );
+            }
+            Message::CloseGameSettings => self.dialogs.settings = None,
+            Message::GameSettingsLoaded(result) => match result {
+                Ok((game, config)) => {
+                    self.dialogs.settings =
+                        Some(GameSettingsState::from_game_and_config(&game, &config));
+                }
+                Err(error) => {
+                    if let Some(settings) = self.dialogs.settings.as_mut() {
+                        settings.error = Some(error);
+                    }
+                }
+            },
+            Message::GameSettingsTitleChanged(title) => {
+                if let Some(settings) = self.dialogs.settings.as_mut() {
+                    settings.title = title;
+                }
+            }
+            Message::GameSettingsEntryChanged(entry) => {
+                if let Some(settings) = self.dialogs.settings.as_mut() {
+                    settings.entry_path = entry;
+                }
+            }
+            Message::GameSettingsRunnerChanged(runner) => {
+                if let Some(settings) = self.dialogs.settings.as_mut() {
+                    settings.runner = runner;
+                }
+            }
+            Message::GameSettingsSandboxChanged(enabled) => {
+                if let Some(settings) = self.dialogs.settings.as_mut() {
+                    settings.sandbox_home = enabled;
+                }
+            }
+            Message::GameSettingsBottleChanged(name) => {
+                if let Some(settings) = self.dialogs.settings.as_mut() {
+                    settings.bottle_name = (!name.trim().is_empty()).then_some(name);
+                }
+            }
+            Message::SaveGameSettings => {
+                let Some(core) = self.core.clone() else {
+                    return Task::none();
+                };
+                let Some(settings) = self.dialogs.settings.as_mut() else {
+                    return Task::none();
+                };
+                let game_id = settings.game_id.clone();
+                let update = settings.into_update_request();
+                settings.saving = true;
+                return Task::perform(
+                    async move {
+                        core.save_game_settings(&game_id, update.game, &update.config)
+                            .await
+                            .map_err(|error| error.to_string())
+                    },
+                    Message::GameSettingsFinished,
+                );
+            }
+            Message::GameSettingsFinished(result) => {
+                if let Some(settings) = self.dialogs.settings.as_mut() {
+                    settings.saving = false;
+                    match result {
+                        Ok(game) => {
+                            self.library.apply_game(game);
+                            self.dialogs.settings = None;
+                        }
+                        Err(error) => settings.error = Some(error),
+                    }
+                }
+            }
         }
         Task::none()
     }
@@ -226,10 +318,15 @@ impl DesktopApp {
         } else {
             base
         };
-        if let Some(scan) = self.dialogs.scan.as_ref() {
+        let with_scan = if let Some(scan) = self.dialogs.scan.as_ref() {
             Modal::new(scan_view(scan)).overlay(with_import)
         } else {
             with_import
+        };
+        if let Some(settings) = self.dialogs.settings.as_ref() {
+            Modal::new(game_settings_view(settings)).overlay(with_scan)
+        } else {
+            with_scan
         }
     }
 

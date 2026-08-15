@@ -24,7 +24,12 @@ pub fn view<'a>(game: &'a GameSummary, launching: bool) -> Element<'a, Message> 
             )))
     };
 
-    container(row![title, launch].spacing(12))
+    let actions = row![
+        button(text("⚙")).on_press(Message::OpenGameSettings(game.id.clone())),
+        launch,
+    ]
+    .spacing(6);
+    container(row![title, actions].spacing(12))
         .width(Length::Fill)
         .padding(14)
         .into()
