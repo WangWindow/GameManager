@@ -51,7 +51,10 @@ pub async fn create_existing_v09_layout() -> Result<TestInstall> {
         })
         .await?;
     database
-        .set_setting(SETTING_CONTAINER_ROOT, "/games/containers")
+        .set_setting(
+            SETTING_CONTAINER_ROOT,
+            &paths.container_root().to_string_lossy(),
+        )
         .await?;
     drop(database);
 

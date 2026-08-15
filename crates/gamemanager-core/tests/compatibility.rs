@@ -11,9 +11,14 @@ async fn opens_v09_database_and_profile_without_reimporting() -> Result<(), Core
     assert_eq!(games.len(), 1);
     assert_eq!(games[0].id, "v09-demo-game");
     assert_eq!(database.engines().await?[0].id, "v09-nwjs");
+    let expected_container_root = installation
+        .paths
+        .container_root()
+        .to_string_lossy()
+        .to_string();
     assert_eq!(
         database.setting(SETTING_CONTAINER_ROOT).await?.as_deref(),
-        Some("/games/containers")
+        Some(expected_container_root.as_str())
     );
     assert!(
         installation

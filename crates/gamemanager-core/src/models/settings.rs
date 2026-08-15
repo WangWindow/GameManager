@@ -4,6 +4,7 @@ pub const SETTING_CONTAINER_ROOT: &str = "container_root";
 pub const SETTING_BOTTLES_DEFAULT: &str = "bottles_default";
 pub const SETTING_BOTTLES_ENABLED: &str = "bottles_enabled";
 pub const SETTING_UI_PREFERENCES: &str = "ui_preferences";
+pub const SETTING_ENGINE_ENABLED: &str = "engine_enabled";
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
