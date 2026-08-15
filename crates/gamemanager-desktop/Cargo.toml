@@ -8,6 +8,10 @@ license.workspace = true
 name = "gamemanager"
 path = "src/main.rs"
 
+[lib]
+name = "gamemanager_desktop"
+path = "src/lib.rs"
+
 [dependencies]
 gamemanager-core.workspace = true
 iced.workspace = true
