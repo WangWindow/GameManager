@@ -4,6 +4,8 @@ mod db;
 mod engines;
 mod error;
 mod game_library;
+mod integrations;
+mod launcher;
 mod models;
 mod paths;
 mod profiles;
@@ -22,6 +24,8 @@ pub use game_library::{
     EntryPoint, GameLibraryService, ImportRequest, ScanPlan, ScanPlanner, ScanRequest, ScanResult,
     UpdateGameRequest,
 };
+pub use integrations::BottlesCli;
+pub use launcher::{LaunchPlan, LaunchResult, Launcher};
 pub use models::{
     AppSettings, EngineRecord, GameConfig, GameRecord, GameSummary, GameViewMode, Runner,
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,

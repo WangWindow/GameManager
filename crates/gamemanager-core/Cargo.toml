@@ -14,6 +14,7 @@ glob.workspace = true
 icoextract_rs.workspace = true
 image.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 toasty.workspace = true
 tokio.workspace = true
