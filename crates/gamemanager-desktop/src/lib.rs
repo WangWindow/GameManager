@@ -3,6 +3,7 @@
 pub mod app;
 pub mod components;
 pub mod message;
+pub mod platform;
 pub mod shell;
 pub mod state;
 

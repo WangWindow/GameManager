@@ -6,18 +6,20 @@ use iced::{
 
 use crate::{
     components::action_button,
-    message::{Message, WindowAction},
-    state::ShellState,
+    message::{Message, WindowAction, WindowMessage},
+    state::{DialogState, ShellState},
 };
 
 pub struct DesktopApp {
     pub shell: ShellState,
+    pub dialogs: DialogState,
 }
 
 impl DesktopApp {
     pub fn boot() -> Self {
         Self {
             shell: ShellState::default(),
+            dialogs: DialogState::default(),
         }
     }
 
@@ -37,22 +39,37 @@ impl DesktopApp {
         match message {
             Message::ThemeModeChanged(mode) => self.shell.set_theme_mode(mode),
             Message::SystemThemeChanged(theme) => self.shell.apply_system_theme(theme),
-            Message::Window(action) => return window_task(action),
+            Message::Window(WindowMessage::Action(action)) => return window_task(action),
+            Message::Window(WindowMessage::FileDropped(path)) => {
+                self.dialogs.import.set_entry_path(path)
+            }
+            Message::Window(WindowMessage::FileHovered(_))
+            | Message::Window(WindowMessage::FilesHoveredLeft)
+            | Message::Window(WindowMessage::Focused(_)) => {}
         }
         Task::none()
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         let controls = row![
-            action_button("—", Message::Window(WindowAction::Minimize)),
-            action_button("□", Message::Window(WindowAction::ToggleMaximize)),
-            action_button("×", Message::Window(WindowAction::Close)),
+            action_button(
+                "—",
+                Message::Window(WindowMessage::Action(WindowAction::Minimize))
+            ),
+            action_button(
+                "□",
+                Message::Window(WindowMessage::Action(WindowAction::ToggleMaximize))
+            ),
+            action_button(
+                "×",
+                Message::Window(WindowMessage::Action(WindowAction::Close))
+            ),
         ]
         .spacing(4);
         let title = button(text("GameManager").size(22))
             .width(Length::Fill)
             .padding(16)
-            .on_press(Message::Window(WindowAction::Drag));
+            .on_press(Message::Window(WindowMessage::Action(WindowAction::Drag)));
         container(column![
             row![title, controls].height(Length::Shrink),
             text("游戏库").size(30)
@@ -65,6 +82,14 @@ impl DesktopApp {
 
     fn theme(&self) -> Theme {
         self.shell.iced_theme()
+    }
+
+    pub fn for_test() -> Self {
+        Self::boot()
+    }
+
+    pub fn update_for_test(&mut self, message: Message) {
+        let _ = self.update(message);
     }
 }
 

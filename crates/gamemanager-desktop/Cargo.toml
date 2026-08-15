@@ -13,5 +13,8 @@ name = "gamemanager_desktop"
 path = "src/lib.rs"
 
 [dependencies]
+dark-light.workspace = true
 gamemanager-core.workspace = true
 iced.workspace = true
+open.workspace = true
+rfd.workspace = true

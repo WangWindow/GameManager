@@ -17,9 +17,18 @@ pub enum WindowAction {
     Close,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
+pub enum WindowMessage {
+    Action(WindowAction),
+    FileHovered(Vec<std::path::PathBuf>),
+    FileDropped(std::path::PathBuf),
+    FilesHoveredLeft,
+    Focused(bool),
+}
+
+#[derive(Clone, Debug)]
 pub enum Message {
     ThemeModeChanged(ThemeMode),
     SystemThemeChanged(SystemTheme),
-    Window(WindowAction),
+    Window(WindowMessage),
 }
