@@ -1,4 +1,4 @@
-use gamemanager_core::ThemeMode;
+use gamemanager_core::{ThemeMode, UiPreferences};
 
 use crate::message::SystemTheme;
 
@@ -12,6 +12,50 @@ pub enum AppTheme {
 pub struct ShellState {
     theme_mode: ThemeMode,
     system_theme: SystemTheme,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PreferencesState {
+    value: UiPreferences,
+    dirty: bool,
+}
+
+impl PreferencesState {
+    pub fn from_value(value: UiPreferences) -> Self {
+        Self {
+            value,
+            dirty: false,
+        }
+    }
+
+    pub fn value(&self) -> &UiPreferences {
+        &self.value
+    }
+
+    pub fn set_theme_mode(&mut self, mode: ThemeMode) {
+        if self.value.theme_mode != mode {
+            self.value.theme_mode = mode;
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_show_status_bar(&mut self, show: bool) {
+        if self.value.show_status_bar != show {
+            self.value.show_status_bar = show;
+            self.dirty = true;
+        }
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    pub fn take_dirty_value(&mut self) -> Option<UiPreferences> {
+        self.dirty.then(|| {
+            self.dirty = false;
+            self.value.clone()
+        })
+    }
 }
 
 impl Default for ShellState {

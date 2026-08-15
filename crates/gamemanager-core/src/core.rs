@@ -1,11 +1,16 @@
-use std::{collections::BTreeMap, fs, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use serde::de::DeserializeOwned;
 
 use crate::{
     AppPaths, AppSettings, CoreError, Database, EngineDetail, EngineRecord, EngineRegistry,
-    EngineSummary, GameConfig, GameLibraryService, GameSummary, ImportRequest, Operation,
-    ProfileStore, RegistryWarning, Result, RuntimeManager, SETTING_BOTTLES_ENABLED,
+    EngineSummary, GameConfig, GameLibraryService, GameSummary, ImportRequest, MkxpzInstallResult,
+    Operation, ProfileStore, RegistryWarning, Result, RuntimeManager, SETTING_BOTTLES_ENABLED,
     SETTING_CONTAINER_ROOT, SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ScanPlanner,
     ScanRequest, ScanResult, UiPreferences,
 };
@@ -200,6 +205,35 @@ impl GameManagerCore {
             .map_err(|error| CoreError::Configuration(error.to_string()))?;
         self.database
             .set_setting(SETTING_UI_PREFERENCES, &value)
+            .await
+    }
+
+    pub async fn set_engine_enabled(&self, id: &str, enabled: bool) -> Result<()> {
+        let mut values =
+            load_setting::<BTreeMap<String, bool>>(&self.database, SETTING_ENGINE_ENABLED)
+                .await?
+                .unwrap_or_default();
+        values.insert(id.to_owned(), enabled);
+        let value = toml::to_string(&values)
+            .map_err(|error| CoreError::Configuration(error.to_string()))?;
+        self.database
+            .set_setting(SETTING_ENGINE_ENABLED, &value)
+            .await
+    }
+
+    pub async fn register_mkxpz_runtime(&self, install: &MkxpzInstallResult) -> Result<()> {
+        self.database
+            .insert_engine(&EngineRecord {
+                id: uuid::Uuid::new_v4().to_string(),
+                name: "mkxp-z".to_owned(),
+                version: install.version.clone(),
+                engine_type: "mkxpz".to_owned(),
+                engine_path: install.executable_path.to_string_lossy().into_owned(),
+                installed_at: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+            })
             .await
     }
 

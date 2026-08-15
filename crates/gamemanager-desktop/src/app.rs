@@ -10,9 +10,12 @@ use crate::{
     components::Modal,
     components::action_button,
     message::{Message, WindowAction, WindowMessage},
-    platform::DesktopDialog,
-    state::{DialogState, GameSettingsState, LibraryState, OperationState, ShellState},
-    views::{game_settings_view, import_view, library_view, scan_view},
+    platform::{DesktopDialog, DesktopOpener},
+    state::{
+        DialogState, EngineListState, GameSettingsState, LibraryState, MaintenanceState,
+        OperationState, PreferencesState, ShellState,
+    },
+    views::{game_settings_view, import_view, library_view, scan_view, settings_view},
 };
 
 pub struct DesktopApp {
@@ -20,6 +23,10 @@ pub struct DesktopApp {
     pub dialogs: DialogState,
     pub library: LibraryState,
     pub operations: OperationState,
+    pub engines: EngineListState,
+    pub maintenance: MaintenanceState,
+    pub preferences: PreferencesState,
+    pub settings_open: bool,
     pub core: Option<Arc<GameManagerCore>>,
     pub bootstrap_error: Option<String>,
 }
@@ -31,6 +38,10 @@ impl DesktopApp {
             dialogs: DialogState::default(),
             library: LibraryState::default(),
             operations: OperationState::default(),
+            engines: EngineListState::default(),
+            maintenance: MaintenanceState::default(),
+            preferences: PreferencesState::default(),
+            settings_open: false,
             core: None,
             bootstrap_error: None,
         }
@@ -54,7 +65,21 @@ impl DesktopApp {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::ThemeModeChanged(mode) => self.shell.set_theme_mode(mode),
+            Message::ThemeModeChanged(mode) => {
+                self.shell.set_theme_mode(mode);
+                self.preferences.set_theme_mode(mode);
+                if let Some(core) = self.core.clone() {
+                    let preferences = self.preferences.value().clone();
+                    return Task::perform(
+                        async move {
+                            core.save_ui_preferences(&preferences)
+                                .await
+                                .map_err(|error| error.to_string())
+                        },
+                        Message::PreferencesSaved,
+                    );
+                }
+            }
             Message::SystemThemeChanged(theme) => self.shell.apply_system_theme(theme),
             Message::Window(WindowMessage::Action(action)) => return window_task(action),
             Message::Window(WindowMessage::FileDropped(path)) => {
@@ -69,7 +94,10 @@ impl DesktopApp {
                     self.core = Some(core);
                     self.shell
                         .set_theme_mode(snapshot.ui_preferences.theme_mode);
+                    self.preferences = PreferencesState::from_value(snapshot.ui_preferences);
                     self.library.replace_games(snapshot.games);
+                    self.engines = EngineListState::from_details(snapshot.engine_details);
+                    self.maintenance = MaintenanceState::with_runtimes(snapshot.runtimes);
                     self.bootstrap_error = None;
                 }
                 Err(error) => self.bootstrap_error = Some(error),
@@ -274,6 +302,94 @@ impl DesktopApp {
                     }
                 }
             }
+            Message::OpenSettings => self.settings_open = true,
+            Message::CloseSettings => self.settings_open = false,
+            Message::EngineEnabledChanged { id, enabled } => {
+                self.engines.apply_enabled(&id, enabled);
+                if let Some(core) = self.core.clone() {
+                    return Task::perform(
+                        async move {
+                            core.set_engine_enabled(&id, enabled)
+                                .await
+                                .map_err(|error| error.to_string())
+                        },
+                        Message::EngineEnabledSaved,
+                    );
+                }
+            }
+            Message::StatusBarChanged(show) => {
+                self.preferences.set_show_status_bar(show);
+                if let Some(core) = self.core.clone() {
+                    let preferences = self.preferences.value().clone();
+                    return Task::perform(
+                        async move {
+                            core.save_ui_preferences(&preferences)
+                                .await
+                                .map_err(|error| error.to_string())
+                        },
+                        Message::PreferencesSaved,
+                    );
+                }
+            }
+            Message::PreferencesSaved(result) => {
+                if let Err(error) = result {
+                    self.bootstrap_error = Some(error);
+                } else {
+                    let _ = self.preferences.take_dirty_value();
+                }
+            }
+            Message::EngineEnabledSaved(result) => {
+                if let Err(error) = result {
+                    self.bootstrap_error = Some(error);
+                }
+            }
+            Message::PickMkxpzArchive => {
+                return Task::perform(DesktopDialog.pick_file(), Message::MkxpzArchivePicked);
+            }
+            Message::MkxpzArchivePicked(path) => {
+                let Some(path) = path else {
+                    return Task::none();
+                };
+                let Some(core) = self.core.clone() else {
+                    self.bootstrap_error = Some("应用尚未完成初始化".to_owned());
+                    return Task::none();
+                };
+                return Task::perform(
+                    async move {
+                        let install = core
+                            .runtime_manager()
+                            .import_mkxpz_archive(&path)
+                            .map_err(|error| error.to_string())?;
+                        core.register_mkxpz_runtime(&install)
+                            .await
+                            .map_err(|error| error.to_string())?;
+                        Ok::<_, String>(install)
+                    },
+                    Message::MkxpzImportFinished,
+                );
+            }
+            Message::MkxpzImportFinished(result) => match result {
+                Ok(_) => {
+                    if let Some(core) = self.core.clone() {
+                        return Task::perform(
+                            async move {
+                                let snapshot =
+                                    core.bootstrap().await.map_err(|error| error.to_string())?;
+                                Ok::<_, String>((core, snapshot))
+                            },
+                            Message::BootstrapFinished,
+                        );
+                    }
+                }
+                Err(error) => self.bootstrap_error = Some(error),
+            },
+            Message::OpenMkxpzBuilds => {
+                if let Err(error) = DesktopOpener
+                    .open_url("https://github.com/mkxp-z/mkxp-z/actions/workflows/autobuild.yml")
+                {
+                    self.bootstrap_error = Some(error.to_string());
+                }
+            }
         }
         Task::none()
     }
@@ -282,6 +398,7 @@ impl DesktopApp {
         let controls = row![
             action_button("＋", Message::OpenImport),
             action_button("⌕", Message::OpenScan),
+            action_button("⚙", Message::OpenSettings),
             action_button(
                 "—",
                 Message::Window(WindowMessage::Action(WindowAction::Minimize))
@@ -323,10 +440,20 @@ impl DesktopApp {
         } else {
             with_import
         };
-        if let Some(settings) = self.dialogs.settings.as_ref() {
+        let with_settings = if let Some(settings) = self.dialogs.settings.as_ref() {
             Modal::new(game_settings_view(settings)).overlay(with_scan)
         } else {
             with_scan
+        };
+        if self.settings_open {
+            Modal::new(settings_view(
+                &self.preferences,
+                &self.engines,
+                &self.maintenance,
+            ))
+            .overlay(with_settings)
+        } else {
+            with_settings
         }
     }
 
