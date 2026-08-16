@@ -1,0 +1,25 @@
+[package]
+name = "gamemanager-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "gamemanager"
+path = "src/main.rs"
+
+[lib]
+name = "gamemanager_desktop"
+path = "src/lib.rs"
+
+[dependencies]
+dark-light.workspace = true
+gamemanager-core.workspace = true
+iced.workspace = true
+iced-shadcn-v2.workspace = true
+lucide-icons.workspace = true
+open.workspace = true
+rfd.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

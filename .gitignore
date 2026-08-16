@@ -4,13 +4,14 @@
 .omo
 
 docs/superpowers
-tests
 
 .env
 .DS_Store
 node_modules
 dist
 temp
+/tests
 
 bun.lock
 Cargo.lock
+target

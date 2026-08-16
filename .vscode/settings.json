@@ -1,7 +1,0 @@
-{
-  // extension settings
-  "rust-analyzer.linkedProjects": [
-    "src-tauri/Cargo.toml"
-  ],
-  "js/ts.tsdk.path": "node_modules/typescript/lib",
-}

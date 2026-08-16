@@ -11,7 +11,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 jobs:
   build-release:
@@ -20,32 +19,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Install Tauri dependencies
+      - name: Install native build dependencies
         run: |
           sudo apt update
           sudo apt install -y \
-            libwebkit2gtk-4.1-dev \
             build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
+            pkg-config \
             libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
             libgtk-3-dev \
             libglib2.0-dev \
-            zip \
-            patchelf \
-            libfuse2
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install bun
-        run: bun install
+            zip
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -54,57 +39,26 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            src-tauri -> target
+            . -> target
 
-      - name: Build Tauri app
+      - name: Check workspace
+        run: |
+          cargo fmt --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+      - name: Build native app
         run: |
           set -e
-          bun run tauri build --no-bundle
-
-      - name: Draft release notes
-        id: release_drafter
-        uses: release-drafter/release-drafter@v6
-        with:
-          publish: false
-          name: ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate commit log between last tag and current
-        id: commitlog
-        run: |
-          set -e
-          # 获取上一个标签的名称
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
-
-          # 如果存在上一个标签，则比较；否则列出所有提交
-          if [ "$LAST_TAG" != "$(git rev-list --max-parents=0 HEAD)" ]; then
-              COMMIT_RANGE="$LAST_TAG..HEAD"
-          else
-              # 如果没有上一个标签，则从第一个提交开始
-              COMMIT_RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
-          fi
-
-          echo "Generating log for commits in range: $COMMIT_RANGE"
-
-          # 生成格式化的提交日志并直接存入 GITHUB_OUTPUT，避免复杂的转义
-          LOG_CONTENT=$(git log $COMMIT_RANGE --pretty=format:'- %h %s (%an <%ae>)')
-          # 使用 echo 的 -E 选项并配合 tr 来确保换行符被正确处理
-          # 然后通过 echo 命令将内容写入 GITHUB_OUTPUT
-          {
-            echo "log<<EOF"
-            echo "$LOG_CONTENT"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
+          cargo build --release -p gamemanager-desktop
 
       - name: List release executable
-        run: ls -lh src-tauri/target/release/gamemanager
+        run: ls -lh target/release/gamemanager
 
       - name: Package executable zip
         run: |
           set -e
-          cd src-tauri/target/release
+          cd target/release
           test -f gamemanager
           zip -j gamemanager-linux-x86_64.zip gamemanager
           echo "Packaged gamemanager-linux-x86_64.zip"
@@ -113,15 +67,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
-          body: |
-            ${{ steps.release_drafter.outputs.body }}
-
-            ## Commits
-            ${{ steps.commitlog.outputs.log }}
-
-            <!-- Note: The commit list above includes all commits between the last tag and this release. -->
+          generate_release_notes: true
           files: |
-            src-tauri/target/release/gamemanager-linux-x86_64.zip
-          overwrite_files: true
+            target/release/gamemanager-linux-x86_64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
