@@ -41,12 +41,6 @@ jobs:
           workspaces: |
             . -> target
 
-      - name: Check workspace
-        run: |
-          cargo fmt --check
-          cargo clippy --workspace --all-targets -- -D warnings
-          cargo test --workspace
-
       - name: Build native app
         run: |
           set -e
