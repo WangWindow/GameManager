@@ -3,7 +3,7 @@ mod nwjs;
 
 pub use mkxpz::{MkxpzInstallResult, ensure_compatibility_patch, import_mkxpz_archive};
 pub use nwjs::{
-    HttpClient, NwjsFlavor, NwjsInstallResult, NwjsStableInfo,
+    DownloadProgressCallback, HttpClient, NwjsFlavor, NwjsInstallResult, NwjsStableInfo,
     build_download_url as build_nwjs_download_url, current_target as current_nwjs_target,
 };
 
@@ -55,8 +55,8 @@ impl RuntimeManager {
         info!(version = %version, ?flavor, target = %target, "NW.js download scheduled");
         let client = self.client.clone();
         let paths = self.paths.clone();
-        Operation::from_future("下载 NW.js", async move {
-            nwjs::download_and_install(&paths, client, &version, flavor, &target).await
+        Operation::from_future_with_progress("下载 NW.js", move |reporter| async move {
+            nwjs::download_and_install(&paths, client, &version, flavor, &target, reporter).await
         })
     }
 
@@ -73,10 +73,10 @@ impl RuntimeManager {
         info!(?flavor, "latest NW.js download scheduled");
         let client = self.client.clone();
         let paths = self.paths.clone();
-        Operation::from_future("下载 NW.js", async move {
+        Operation::from_future_with_progress("下载 NW.js", move |reporter| async move {
             let version = nwjs::fetch_stable_version(client.clone()).await?;
             let target = nwjs::current_target()?;
-            nwjs::download_and_install(&paths, client, &version, flavor, &target).await
+            nwjs::download_and_install(&paths, client, &version, flavor, &target, reporter).await
         })
     }
 

@@ -189,7 +189,11 @@ impl DesktopApp {
             Message::LaunchFinished { game_id, result } => {
                 self.library.finish_launch(&game_id);
                 match result {
-                    Ok(game) => self.library.apply_game(game),
+                    Ok(game) => {
+                        let title = game.title.clone();
+                        self.library.apply_game(game);
+                        return self.show_toast(format!("已启动 {title}"));
+                    }
                     Err(error) => return self.show_toast(error),
                 }
             }

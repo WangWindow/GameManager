@@ -138,3 +138,17 @@ fn desktop_app_reduces_library_messages() {
     )));
     assert_eq!(app.library.view_mode, GameViewMode::Grid);
 }
+
+#[test]
+fn successful_launch_shows_a_completion_toast() {
+    let mut app = DesktopApp::for_test();
+    app.update_for_test(Message::LaunchFinished {
+        game_id: "one".to_owned(),
+        result: Ok(game("one", "Moonlight", "nwjs")),
+    });
+
+    assert_eq!(
+        app.toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("已启动 Moonlight")
+    );
+}

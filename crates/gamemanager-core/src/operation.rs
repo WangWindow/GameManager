@@ -5,7 +5,7 @@ use std::{
 };
 
 use futures_util::{StreamExt, stream};
-use tokio::sync::watch;
+use tokio::sync::broadcast;
 
 use crate::Result;
 
@@ -54,6 +54,27 @@ impl OperationProgress {
     }
 }
 
+/// Allows an asynchronous operation to publish intermediate progress while
+/// its result future is running.
+#[derive(Clone)]
+pub struct OperationReporter {
+    id: OperationId,
+    stage: String,
+    sender: broadcast::Sender<OperationProgress>,
+}
+
+impl OperationReporter {
+    pub fn report(&self, percent: Option<u8>) {
+        self.report_stage(self.stage.clone(), percent);
+    }
+
+    pub fn report_stage(&self, stage: impl Into<String>, percent: Option<u8>) {
+        let _ = self
+            .sender
+            .send(OperationProgress::new(self.id, stage, percent));
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum OperationOutcome<T> {
     Completed(T),
@@ -64,12 +85,12 @@ type BoxedResult<T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'static>>;
 
 struct CompletionSignal {
     progress: OperationProgress,
-    sender: watch::Sender<Option<OperationProgress>>,
 }
 
 pub struct Operation<T> {
     id: OperationId,
     progress: Vec<OperationProgress>,
+    sender: broadcast::Sender<OperationProgress>,
     completion: Option<CompletionSignal>,
     result: Option<BoxedResult<T>>,
 }
@@ -82,6 +103,7 @@ impl<T: Send + 'static> Operation<T> {
         F: Future<Output = Result<T>> + Send + 'static,
     {
         let id = OperationId::next();
+        let (sender, _) = broadcast::channel(128);
         let progress = steps
             .into_iter()
             .map(|(stage, percent)| OperationProgress::new(id, stage, Some(percent)))
@@ -89,6 +111,7 @@ impl<T: Send + 'static> Operation<T> {
         Self {
             id,
             progress,
+            sender,
             completion: None,
             result: Some(Box::pin(result)),
         }
@@ -98,18 +121,30 @@ impl<T: Send + 'static> Operation<T> {
     where
         F: Future<Output = Result<T>> + Send + 'static,
     {
+        Self::from_future_with_progress(stage, move |_| result)
+    }
+
+    pub fn from_future_with_progress<F, Fut>(stage: impl Into<String>, build: F) -> Self
+    where
+        F: FnOnce(OperationReporter) -> Fut,
+        Fut: Future<Output = Result<T>> + Send + 'static,
+    {
         let id = OperationId::next();
         let stage = stage.into();
-        let progress = vec![OperationProgress::new(id, stage.clone(), Some(0))];
-        let (sender, _) = watch::channel(None);
+        let (sender, _) = broadcast::channel(128);
+        let reporter = OperationReporter {
+            id,
+            stage: stage.clone(),
+            sender: sender.clone(),
+        };
         Self {
             id,
-            progress,
+            progress: vec![OperationProgress::new(id, stage.clone(), Some(0))],
+            sender,
             completion: Some(CompletionSignal {
                 progress: OperationProgress::new(id, stage, Some(100)),
-                sender,
             }),
-            result: Some(Box::pin(result)),
+            result: Some(Box::pin(build(reporter))),
         }
     }
 
@@ -119,22 +154,20 @@ impl<T: Send + 'static> Operation<T> {
 
     pub fn progress(&self) -> futures_util::stream::BoxStream<'static, OperationProgress> {
         let initial = stream::iter(self.progress.clone());
-        let Some(completion) = self.completion.as_ref() else {
+        if self.completion.is_none() {
             return initial.boxed();
-        };
-        let mut receiver = completion.sender.subscribe();
-        initial
-            .chain(
-                stream::once(async move {
-                    receiver
-                        .wait_for(|progress| progress.is_some())
-                        .await
-                        .ok()
-                        .and_then(|progress| (*progress).clone())
-                })
-                .filter_map(|progress| async move { progress }),
-            )
-            .boxed()
+        }
+        let receiver = self.sender.subscribe();
+        let updates = stream::unfold(receiver, |mut receiver| async move {
+            loop {
+                match receiver.recv().await {
+                    Ok(progress) => return Some((progress, receiver)),
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => return None,
+                }
+            }
+        });
+        initial.chain(updates).boxed()
     }
 
     pub async fn into_future(mut self) -> Result<T> {
@@ -150,7 +183,7 @@ impl<T: Send + 'static> Operation<T> {
             } else {
                 OperationStage::Failed
             };
-            let _ = completion.sender.send(Some(progress));
+            let _ = self.sender.send(progress);
         }
         result
     }

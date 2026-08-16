@@ -9,7 +9,9 @@ use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use tracing::{debug, info};
 
-use crate::{CoreError, Result};
+use crate::{CoreError, OperationReporter, Result};
+
+pub type DownloadProgressCallback = Arc<dyn Fn(u64, Option<u64>) + Send + Sync>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NwjsFlavor {
@@ -35,6 +37,14 @@ pub struct NwjsInstallResult {
 
 pub trait HttpClient: Send + Sync {
     fn get(&self, url: &str) -> BoxFuture<'static, Result<Vec<u8>>>;
+
+    fn get_with_progress(
+        &self,
+        url: &str,
+        _progress: DownloadProgressCallback,
+    ) -> BoxFuture<'static, Result<Vec<u8>>> {
+        self.get(url)
+    }
 }
 
 #[derive(Clone)]
@@ -58,20 +68,39 @@ impl Default for ReqwestHttpClient {
 
 impl HttpClient for ReqwestHttpClient {
     fn get(&self, url: &str) -> BoxFuture<'static, Result<Vec<u8>>> {
+        self.get_with_progress(url, Arc::new(|_, _| {}))
+    }
+
+    fn get_with_progress(
+        &self,
+        url: &str,
+        progress: DownloadProgressCallback,
+    ) -> BoxFuture<'static, Result<Vec<u8>>> {
         let client = self.client.clone();
         let url = url.to_owned();
         Box::pin(async move {
-            client
+            let mut response = client
                 .get(url)
                 .send()
                 .await
                 .map_err(|error| CoreError::Engine(format!("network request failed: {error}")))?
                 .error_for_status()
-                .map_err(|error| CoreError::Engine(format!("network request failed: {error}")))?
-                .bytes()
+                .map_err(|error| CoreError::Engine(format!("network request failed: {error}")))?;
+            let total = response.content_length();
+            let mut downloaded = 0_u64;
+            let mut body =
+                Vec::with_capacity(total.unwrap_or_default().min(usize::MAX as u64) as usize);
+            progress(downloaded, total);
+            while let Some(chunk) = response
+                .chunk()
                 .await
-                .map(|bytes| bytes.to_vec())
-                .map_err(|error| CoreError::Engine(format!("network response failed: {error}")))
+                .map_err(|error| CoreError::Engine(format!("network response failed: {error}")))?
+            {
+                downloaded = downloaded.saturating_add(chunk.len() as u64);
+                body.extend_from_slice(&chunk);
+                progress(downloaded, total);
+            }
+            Ok(body)
         })
     }
 }
@@ -136,11 +165,24 @@ pub(crate) async fn download_and_install(
     version: &str,
     flavor: NwjsFlavor,
     target: &str,
+    reporter: OperationReporter,
 ) -> Result<NwjsInstallResult> {
     let url = build_download_url(version, flavor, target);
     info!(version = %version, ?flavor, target = %target, url = %url, "downloading NW.js runtime");
-    let archive = client.get(&url).await?;
+    let download_reporter = reporter.clone();
+    let progress: DownloadProgressCallback = Arc::new(move |downloaded, total| {
+        let percent = total.filter(|total| *total > 0).map(|total| {
+            (downloaded
+                .saturating_mul(90)
+                .checked_div(total)
+                .unwrap_or(0)
+                .min(90)) as u8
+        });
+        download_reporter.report(percent);
+    });
+    let archive = client.get_with_progress(&url, progress).await?;
     debug!(bytes = archive.len(), "NW.js archive downloaded");
+    reporter.report_stage("安装 NW.js", Some(90));
     let root = paths.nwjs_runtime_root();
     let staging = root.join(format!(".staging-{version}-{target}"));
     if staging.exists() {
@@ -165,6 +207,7 @@ pub(crate) async fn download_and_install(
         extract_zip(&archive_path, &extract)?;
     }
     debug!(path = %extract.display(), "NW.js archive extracted");
+    reporter.report_stage("安装 NW.js", Some(98));
     let source = single_root(&extract).unwrap_or(extract.clone());
     let install = root
         .join(version)

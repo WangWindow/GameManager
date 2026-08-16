@@ -34,6 +34,26 @@ async fn future_operation_emits_terminal_progress_after_the_future_finishes() {
     assert_eq!(terminal.state, OperationStage::Completed);
 }
 
+#[tokio::test]
+async fn progress_operation_forwards_intermediate_updates() {
+    let operation = Operation::from_future_with_progress("download", |reporter| async move {
+        reporter.report(Some(25));
+        reporter.report(Some(75));
+        Ok::<_, CoreError>(7)
+    });
+    let mut progress = operation.progress();
+    let future = operation.into_future();
+
+    assert_eq!(progress.next().await.expect("start event").percent, Some(0));
+    assert_eq!(future.await.expect("operation result"), 7);
+    assert_eq!(progress.next().await.expect("25% event").percent, Some(25));
+    assert_eq!(progress.next().await.expect("75% event").percent, Some(75));
+    assert_eq!(
+        progress.next().await.expect("terminal event").percent,
+        Some(100)
+    );
+}
+
 #[test]
 fn managed_mkxpz_runtime_contains_the_global_steam_patch() -> gamemanager_core::Result<()> {
     let root = tempfile::tempdir()?;

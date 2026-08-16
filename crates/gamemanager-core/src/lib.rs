@@ -38,10 +38,13 @@ pub use models::{
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,
     SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ThemeMode, UiPreferences, WindowBackend,
 };
-pub use operation::{Operation, OperationId, OperationOutcome, OperationProgress, OperationStage};
+pub use operation::{
+    Operation, OperationId, OperationOutcome, OperationProgress, OperationReporter, OperationStage,
+};
 pub use paths::AppPaths;
 pub use profiles::{CoverResolver, IconAsset, IconSource, PeIconSource, ProfileStore};
 pub use runtime::{
-    HttpClient, MkxpzInstallResult, NwjsFlavor, NwjsInstallResult, NwjsStableInfo, RuntimeManager,
-    build_nwjs_download_url, current_nwjs_target, ensure_compatibility_patch,
+    DownloadProgressCallback, HttpClient, MkxpzInstallResult, NwjsFlavor, NwjsInstallResult,
+    NwjsStableInfo, RuntimeManager, build_nwjs_download_url, current_nwjs_target,
+    ensure_compatibility_patch,
 };
