@@ -233,11 +233,26 @@ impl EngineRegistry {
     }
 
     pub fn detect(&self, context: &dyn DetectionContext) -> Option<DetectionMatch> {
+        self.detect_matching(context, |_| true)
+    }
+
+    /// Detects the best engine that is eligible for automatic directory scans.
+    /// Engines marked `skip_scan` remain available for manual imports, but
+    /// must not mask another engine that can scan the same directory.
+    pub fn detect_for_scan(&self, context: &dyn DetectionContext) -> Option<DetectionMatch> {
+        self.detect_matching(context, |entry| !entry.profile.meta.skip_scan)
+    }
+
+    fn detect_matching(
+        &self,
+        context: &dyn DetectionContext,
+        include: impl Fn(&EngineEntry) -> bool,
+    ) -> Option<DetectionMatch> {
         let mut best_specific: Option<Candidate> = None;
         let mut best_other: Option<Candidate> = None;
 
         for entry in self.entries.values() {
-            if !entry.enabled || !entry.valid {
+            if !entry.enabled || !entry.valid || !include(entry) {
                 continue;
             }
             if entry
@@ -370,16 +385,20 @@ impl EngineRegistry {
 
         for pattern in &profile.launch.entry_patterns {
             let candidate = if pattern == "@native" {
-                entries.iter().find(|path| is_native_executable(path))
+                entries.iter().find(|path| {
+                    is_native_executable(path)
+                        && !is_excluded(path, &profile.launch.exclude_patterns)
+                })
             } else {
                 entries.iter().find(|path| {
                     let name = path.file_name().and_then(|name| name.to_str());
-                    name.is_some_and(|name| simple_glob_match(pattern, name))
+                    name.is_some_and(|name| {
+                        simple_glob_match(pattern, name)
+                            && !is_excluded(path, &profile.launch.exclude_patterns)
+                    })
                 })
             };
-            if let Some(candidate) = candidate
-                && !is_excluded(candidate, &profile.launch.exclude_patterns)
-            {
+            if let Some(candidate) = candidate {
                 return Some(candidate.clone());
             }
         }

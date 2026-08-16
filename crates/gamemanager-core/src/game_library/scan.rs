@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     path::{Path, PathBuf},
 };
 
@@ -68,33 +68,52 @@ impl ScanPlanner {
             .collect::<Vec<_>>();
         let enabled = enabled_engine_ids.iter().cloned().collect::<BTreeSet<_>>();
 
-        let mut queue = vec![(request.root.clone(), 0_u32)];
+        let mut queue = VecDeque::from([(request.root.clone(), 0_u32)]);
         let mut candidates = Vec::new();
         let mut entry_candidates = Vec::new();
         let mut scanned_directories = 0;
 
-        while let Some((directory, depth)) = queue.pop() {
-            if is_nwjs_runtime_dir(&directory) {
-                continue;
-            }
+        while let Some((directory, depth)) = queue.pop_front() {
             scanned_directories += 1;
 
-            let context = FsDetectionContext::new(directory.clone());
-            if let Some(detection) = self.registry.detect(&context)
-                && enabled.contains(&detection.engine_id)
-                && let Some(entry_path) = self
-                    .registry
-                    .resolve_entry(&detection.engine_id, &directory)
-            {
-                candidates.push(directory.clone());
-                entry_candidates.push(ScanCandidate {
-                    game_root: directory.clone(),
-                    entry_path,
-                    engine_id: detection.engine_id,
-                });
+            if depth > request.max_depth || is_nwjs_runtime_dir(&directory) {
+                continue;
             }
 
-            if depth >= request.max_depth {
+            let context = FsDetectionContext::new(directory.clone());
+            let detection = self
+                .registry
+                .detect_for_scan(&context)
+                .filter(|detection| enabled.contains(&detection.engine_id));
+
+            // A detected game is a scan boundary. The only exception is the
+            // selected root itself when it is a collection containing multiple
+            // directly-detectable game directories.
+            let is_collection_root =
+                depth == 0 && is_game_collection_root(&self.registry, &directory, &enabled);
+
+            if let Some(detection) = detection
+                && !is_collection_root
+            {
+                if let Some(entry_path) = self
+                    .registry
+                    .resolve_entry(&detection.engine_id, &directory)
+                {
+                    candidates.push(directory.clone());
+                    entry_candidates.push(ScanCandidate {
+                        game_root: directory.clone(),
+                        entry_path,
+                        engine_id: detection.engine_id,
+                    });
+                }
+
+                // Do not scan inside a recognized game. Its subdirectories
+                // contain assets, saves, runtimes, and plugins rather than
+                // independent games; those can still be imported manually.
+                continue;
+            }
+
+            if depth == request.max_depth {
                 continue;
             }
             let Ok(entries) = std::fs::read_dir(&directory) else {
@@ -125,6 +144,45 @@ impl ScanPlanner {
             scanned_directories,
         })
     }
+}
+
+/// Returns whether the scan root is a collection directory rather than a
+/// single game. This mirrors the v0.9.3 behavior: two directly detectable
+/// children are enough to keep traversing the root.
+fn is_game_collection_root(
+    registry: &EngineRegistry,
+    root: &Path,
+    enabled: &BTreeSet<String>,
+) -> bool {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return false;
+    };
+
+    let mut detected_children = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir()
+            || path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+            || is_nwjs_runtime_dir(&path)
+        {
+            continue;
+        }
+
+        let context = crate::FsDetectionContext::new(path);
+        if registry
+            .detect_for_scan(&context)
+            .is_some_and(|detection| enabled.contains(&detection.engine_id))
+        {
+            detected_children += 1;
+            if detected_children >= 2 {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 pub(crate) fn is_nwjs_runtime_dir(path: &Path) -> bool {

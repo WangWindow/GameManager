@@ -25,5 +25,14 @@ weight = 2
 [launch]
 strategy = "bottles"
 entry_patterns = ["@native", "*.sh", "Game.exe", "*.exe"]
+exclude_patterns = [
+    "*config*.exe",
+    "*crash*.exe",
+    "*oldsystem*.exe",
+    "*open*folder*.exe",
+    "*reset*.exe",
+    "*savedata*.exe",
+    "*setup*.exe",
+]
 args = []
 sandbox_home = false

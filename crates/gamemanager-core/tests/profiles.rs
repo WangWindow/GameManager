@@ -106,6 +106,33 @@ fn extracted_icon_is_preferred_before_sidecar_and_directory_images() -> Result<(
     Ok(())
 }
 
+#[test]
+fn custom_executable_cover_is_extracted_into_the_profile() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let executable = root.path().join("Game.exe");
+    fs::write(&executable, [])?;
+
+    let profiles = ProfileStore::new(root.path().join("containers"));
+    profiles.save("cover-test", &GameConfig::default())?;
+    let resolver = CoverResolver::with_icon_source(profiles, Arc::new(PngIconSource));
+
+    let result = resolver.set_custom_cover("cover-test", &executable)?;
+
+    assert_eq!(
+        result.file_name().and_then(|name| name.to_str()),
+        Some("cover.png")
+    );
+    assert_eq!(
+        resolver
+            .profiles()
+            .load("cover-test")?
+            .cover_file
+            .as_deref(),
+        Some("cover.png")
+    );
+    Ok(())
+}
+
 struct PngIconSource;
 
 impl IconSource for PngIconSource {

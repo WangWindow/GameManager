@@ -469,7 +469,7 @@ impl DesktopApp {
             }
             Message::PickGameSettingsCover => {
                 return Task::perform(
-                    DesktopDialog.pick_image_file(),
+                    DesktopDialog.pick_cover_file(),
                     Message::GameSettingsCoverPicked,
                 );
             }

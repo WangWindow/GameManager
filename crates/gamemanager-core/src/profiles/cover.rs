@@ -96,6 +96,18 @@ impl CoverResolver {
 
     /// Copies a user-selected cover into the managed profile directory.
     pub fn set_custom_cover(&self, profile_key: &str, source: &Path) -> Result<PathBuf> {
+        if source
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        {
+            let asset = self.icon_source.extract(source)?.ok_or_else(|| {
+                CoreError::Cover(format!(
+                    "could not extract an icon from executable: {}",
+                    source.display()
+                ))
+            })?;
+            return self.save_icon(profile_key, asset);
+        }
         self.copy_image(profile_key, source)
     }
 

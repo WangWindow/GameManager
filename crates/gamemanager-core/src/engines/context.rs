@@ -137,13 +137,24 @@ pub(crate) fn simple_glob_match(pattern: &str, name: &str) -> bool {
 pub(crate) fn is_native_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
-    path.is_file()
-        && !path
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
-        && path
+    if !path.is_file() {
+        return false;
+    }
+
+    if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        || !path
             .metadata()
             .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+    {
+        return false;
+    }
+
+    infer::get_from_path(path)
+        .ok()
+        .flatten()
+        .is_some_and(|kind| matches!(kind.extension(), "elf" | "mach"))
 }
 
 #[cfg(not(unix))]

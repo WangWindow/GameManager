@@ -15,6 +15,7 @@ flate2 = "1.1"
 futures-util = "0.3"
 gamemanager-core = { path = "crates/gamemanager-core" }
 glob = "0.3"
+infer = "0.22"
 icoextract_rs = "0.1.2"
 iced = { version = "0.14", features = ["tokio", "image-without-codecs", "svg"] }
 iced-shadcn-v2 = { git = "https://github.com/FerrisMind/shadcn-rs.git", rev = "570ee5dc6fec6b16680fcdfd56c4aa570d24d091", default-features = false, features = ["wgpu"] }

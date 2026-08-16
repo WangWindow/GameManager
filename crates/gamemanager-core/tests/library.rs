@@ -151,6 +151,153 @@ fn scan_plan_resolves_the_profile_entry_before_importing() -> gamemanager_core::
     Ok(())
 }
 
+#[test]
+fn scan_plan_stops_at_a_detected_game_directory() -> gamemanager_core::Result<()> {
+    let root = tempfile::tempdir()?;
+    let game = root.path().join("game");
+    fs::create_dir_all(game.join("assets/nested-game"))?;
+    fs::write(game.join("Game.exe"), [])?;
+    fs::write(game.join("assets/nested-game/Game.exe"), [])?;
+
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+    let plan = ScanPlanner::new(registry).plan(ScanRequest::new(root.path(), 3))?;
+
+    assert_eq!(plan.candidates, vec![game]);
+    assert_eq!(plan.scanned_directories, 2);
+    Ok(())
+}
+
+#[test]
+fn scan_plan_treats_a_root_with_multiple_games_as_a_collection() -> gamemanager_core::Result<()> {
+    let root = tempfile::tempdir()?;
+    fs::write(root.path().join("collection-launcher.exe"), [])?;
+    for name in ["game-a", "game-b"] {
+        let game = root.path().join(name);
+        fs::create_dir_all(&game)?;
+        fs::write(game.join("Game.exe"), [])?;
+    }
+
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+    let plan = ScanPlanner::new(registry).plan(ScanRequest::new(root.path(), 2))?;
+
+    assert_eq!(
+        plan.candidates,
+        vec![root.path().join("game-a"), root.path().join("game-b")]
+    );
+    assert!(!plan.candidates.contains(&root.path().to_path_buf()));
+    Ok(())
+}
+
+#[test]
+fn scan_plan_ignores_a_skip_scan_match_when_another_engine_can_scan() -> gamemanager_core::Result<()>
+{
+    let root = tempfile::tempdir()?;
+    let game = root.path().join("game");
+    fs::create_dir_all(&game)?;
+    fs::write(game.join("Game.exe"), [])?;
+    fs::write(game.join("readme.html"), "<p>notes</p>")?;
+
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+    let plan = ScanPlanner::new(registry).plan(ScanRequest::new(root.path(), 1))?;
+
+    assert_eq!(plan.candidates, vec![game.clone()]);
+    assert_eq!(plan.entry_candidates[0].engine_id, "other");
+    assert_eq!(plan.entry_candidates[0].entry_path, game.join("Game.exe"));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn entry_resolution_does_not_treat_executable_mount_files_as_native() -> gamemanager_core::Result<()>
+{
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir()?;
+    for name in [
+        ".nomedia",
+        "GameAssembly.dll",
+        "MiSideFull.exe",
+        "UnityCrashHandler64.exe",
+        "UnityPlayer.dll",
+    ] {
+        let path = root.path().join(name);
+        fs::write(&path, [])?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
+    }
+    fs::create_dir(root.path().join("MiSideFull_Data"))?;
+
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+
+    assert_eq!(
+        registry.resolve_entry("unity", root.path()),
+        Some(root.path().join("MiSideFull.exe"))
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn entry_resolution_uses_a_real_native_binary_for_native_patterns() -> gamemanager_core::Result<()>
+{
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir()?;
+    fs::write(root.path().join("Phoenixes.pck"), [])?;
+    let native = root.path().join("Phoenixes.x86_64");
+    fs::copy(std::env::current_exe()?, &native)?;
+    fs::set_permissions(&native, fs::Permissions::from_mode(0o755))?;
+    let windows = root.path().join("Phoenixes.exe");
+    fs::write(&windows, [])?;
+    fs::set_permissions(&windows, fs::Permissions::from_mode(0o755))?;
+
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+
+    assert_eq!(registry.resolve_entry("godot", root.path()), Some(native));
+    Ok(())
+}
+
+#[test]
+fn other_entry_resolution_skips_common_helper_executables() -> gamemanager_core::Result<()> {
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+
+    let alice = tempfile::tempdir()?;
+    for name in ["OpenSaveFolder.exe", "ResetConfig.exe", "dohnadohna.exe"] {
+        fs::write(alice.path().join(name), [])?;
+    }
+    assert_eq!(
+        registry.resolve_entry("other", alice.path()),
+        Some(alice.path().join("dohnadohna.exe"))
+    );
+
+    let kirikiri = tempfile::tempdir()?;
+    for name in [
+        "savedata_location_changer.exe",
+        "youmuin.exe",
+        "youmuin@config.exe",
+        "youmuin_oldsystem.exe",
+        "youmuin_setup.exe",
+    ] {
+        fs::write(kirikiri.path().join(name), [])?;
+    }
+    assert_eq!(
+        registry.resolve_entry("other", kirikiri.path()),
+        Some(kirikiri.path().join("youmuin.exe"))
+    );
+    Ok(())
+}
+
 struct TestLibrary {
     root: TempDir,
     service: GameLibraryService,
