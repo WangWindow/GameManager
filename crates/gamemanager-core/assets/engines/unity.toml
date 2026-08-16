@@ -2,7 +2,6 @@
 id = "unity"
 name = "Unity"
 category = "other"
-icon = "ri:gamepad-line"
 priority = 5
 
 [detection]

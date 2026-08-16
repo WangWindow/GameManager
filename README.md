@@ -1,50 +1,38 @@
-
 # GameManager
 
-GameManager 是一个基于 Tauri + React + TypeScript 的桌面游戏管理器，支持 RPG Maker MV/MZ 游戏的导入、启动和管理。项目采用 Vite 构建，界面美观，支持多平台运行。
+GameManager 是一个使用 Rust 和 Iced 构建的原生桌面游戏管理器。
 
 ## 主要功能
 
-- 游戏库管理：自动扫描和导入本地 RPG Maker 游戏，展示游戏封面、版本、引擎类型等信息。
-- 游戏启动：一键启动已导入的游戏，支持参数配置。
-- 游戏设置：可修改游戏标题、路径、封面等信息，支持删除和路径校验。
-- 应用设置：切换状态栏显示、容器清理、NW.js 下载等高级功能。
-- 窗口控制：支持最小化、最大化、关闭窗口，适配 Tauri 框架。
-- 数据持久化：游戏信息和设置通过 SQLite 数据库存储，后端由 Rust 实现。
+- 游戏库管理：导入、扫描、搜索和管理本地游戏。
+- 启动方式：支持 native、Bottles、NW.js、mkxp-z 和 external。
+- 运行时管理：导入 mkxp-z，管理 NW.js 与 mkxp-z 运行时。
 
 ## 技术栈
 
-- 前端：React, TypeScript, TailwindCSS, Vite
-- 后端：Rust, Tauri, SQLx
-- 依赖：@tauri-apps/api, @iconify/react ...
-
-## 截图
-
-![主界面截图](assets/screenshot-2026-01-10_15-09-42.png)
+- Rust 2024
+- Iced 0.14
+- Toasty 0.10 + SQLite
+- NW.js、mkxp-z 和 Bottles 集成
 
 ## 快速开始
 
-1. 安装依赖
+1. 安装 Rust stable
+
+2. 开发模式启动
 
  ```bash
- npm install
- ```
-
-1. 开发模式启动
-
- ```bash
- npm run tauri dev
+ cargo run -p gamemanager-desktop
  ```
 
 1. 构建发布版
 
  ```bash
- npm run build
- npm run tauri build
+ cargo build --release -p gamemanager-desktop
  ```
 
 ## 推荐开发环境
 
-- VS Code + Volar + Tauri + rust-analyzer
+- VS Code + rust-analyzer
 
 ---

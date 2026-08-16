@@ -1,7 +1,58 @@
 use std::{collections::BTreeMap, ffi::OsStr, fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
-use gamemanager_core::{BottlesCli, EngineRegistry, GameConfig, GameRecord, Launcher, Runner};
+use gamemanager_core::{
+    AppPaths, BottlesCli, EngineRegistry, GameConfig, GameManagerCore, GameRecord, ImportRequest,
+    Launcher, Runner,
+};
 use tempfile::TempDir;
+
+#[tokio::test]
+async fn core_launch_updates_play_history_after_spawning() -> gamemanager_core::Result<()> {
+    let root = tempfile::tempdir()?;
+    let paths = AppPaths::from_data_dir(root.path().join("data"));
+    let core = GameManagerCore::open(paths).await?;
+    let game_dir = root.path().join("game");
+    let entry = game_dir.join("launch-game");
+    fs::create_dir_all(&game_dir)?;
+    fs::write(&entry, "#!/bin/sh\nexit 0\n")?;
+    fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
+
+    let imported = core.import_game(ImportRequest::from_entry(&entry)).await?;
+    let mut config = core.game_config(&imported.profile_key).await?;
+    config.runner = Runner::Native;
+    core.profiles().save(&imported.profile_key, &config)?;
+
+    let launched = core.launch_game(&imported.id).await?;
+
+    assert_eq!(launched.play_count, 1);
+    assert!(launched.last_played_at.is_some());
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn importing_bottles_games_snapshots_the_current_default_bottle()
+-> gamemanager_core::Result<()> {
+    let root = tempfile::tempdir()?;
+    let core = GameManagerCore::open(AppPaths::from_data_dir(root.path().join("data"))).await?;
+    core.set_default_bottle(Some("Games")).await?;
+
+    let first_entry = root.path().join("first/Game.exe");
+    fs::create_dir_all(first_entry.parent().expect("entry parent"))?;
+    fs::write(&first_entry, [])?;
+    let first = core
+        .import_game(ImportRequest::from_entry(&first_entry).with_engine("rpgmakervx"))
+        .await?;
+
+    let first_config = core.game_config(&first.profile_key).await?;
+    assert_eq!(first_config.runner, Runner::Bottles);
+    assert_eq!(first_config.bottle_name.as_deref(), Some("Games"));
+
+    core.set_default_bottle(Some("Testing")).await?;
+    let unchanged = core.game_config(&first.profile_key).await?;
+    assert_eq!(unchanged.bottle_name.as_deref(), Some("Games"));
+    Ok(())
+}
 
 #[test]
 fn mkxpz_plan_keeps_profile_config_and_sandboxes_home() -> gamemanager_core::Result<()> {

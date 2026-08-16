@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use gamemanager_core::{AppPaths, GameViewMode, ThemeMode, UiPreferences};
+use gamemanager_core::{AppPaths, GameViewMode, ThemeMode, UiPreferences, WindowBackend};
 
 #[test]
 fn v09_layout_uses_the_existing_file_names() {
@@ -29,11 +29,12 @@ fn v09_layout_uses_the_existing_file_names() {
 }
 
 #[test]
-fn ui_preferences_do_not_require_webview_local_storage() {
+fn ui_preferences_do_not_require_browser_local_storage() {
     let preferences = UiPreferences::default();
 
     assert_eq!(preferences.theme_mode, ThemeMode::System);
     assert_eq!(preferences.view_mode, GameViewMode::List);
     assert!(preferences.show_status_bar);
     assert!(preferences.search_query.is_empty());
+    assert_eq!(preferences.window_backend, WindowBackend::Auto);
 }

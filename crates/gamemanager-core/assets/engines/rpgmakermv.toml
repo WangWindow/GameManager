@@ -2,7 +2,6 @@
 id = "rpgmakermv"
 name = "RPG Maker MV/MZ"
 category = "nwjs"
-icon = "ri:window-line"
 priority = 2
 
 [detection]

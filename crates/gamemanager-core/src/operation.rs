@@ -5,6 +5,7 @@ use std::{
 };
 
 use futures_util::{StreamExt, stream};
+use tokio::sync::watch;
 
 use crate::Result;
 
@@ -61,9 +62,15 @@ pub enum OperationOutcome<T> {
 
 type BoxedResult<T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'static>>;
 
+struct CompletionSignal {
+    progress: OperationProgress,
+    sender: watch::Sender<Option<OperationProgress>>,
+}
+
 pub struct Operation<T> {
     id: OperationId,
     progress: Vec<OperationProgress>,
+    completion: Option<CompletionSignal>,
     result: Option<BoxedResult<T>>,
 }
 
@@ -82,6 +89,7 @@ impl<T: Send + 'static> Operation<T> {
         Self {
             id,
             progress,
+            completion: None,
             result: Some(Box::pin(result)),
         }
     }
@@ -90,7 +98,19 @@ impl<T: Send + 'static> Operation<T> {
     where
         F: Future<Output = Result<T>> + Send + 'static,
     {
-        Self::from_steps([(stage.into(), 0), ("complete".to_owned(), 100)], result)
+        let id = OperationId::next();
+        let stage = stage.into();
+        let progress = vec![OperationProgress::new(id, stage.clone(), Some(0))];
+        let (sender, _) = watch::channel(None);
+        Self {
+            id,
+            progress,
+            completion: Some(CompletionSignal {
+                progress: OperationProgress::new(id, stage, Some(100)),
+                sender,
+            }),
+            result: Some(Box::pin(result)),
+        }
     }
 
     pub fn id(&self) -> OperationId {
@@ -98,14 +118,41 @@ impl<T: Send + 'static> Operation<T> {
     }
 
     pub fn progress(&self) -> futures_util::stream::BoxStream<'static, OperationProgress> {
-        stream::iter(self.progress.clone()).boxed()
+        let initial = stream::iter(self.progress.clone());
+        let Some(completion) = self.completion.as_ref() else {
+            return initial.boxed();
+        };
+        let mut receiver = completion.sender.subscribe();
+        initial
+            .chain(
+                stream::once(async move {
+                    receiver
+                        .wait_for(|progress| progress.is_some())
+                        .await
+                        .ok()
+                        .and_then(|progress| (*progress).clone())
+                })
+                .filter_map(|progress| async move { progress }),
+            )
+            .boxed()
     }
 
     pub async fn into_future(mut self) -> Result<T> {
-        self.result
+        let result = self
+            .result
             .take()
             .expect("operation future already consumed")
-            .await
+            .await;
+        if let Some(completion) = self.completion {
+            let mut progress = completion.progress;
+            progress.state = if result.is_ok() {
+                OperationStage::Completed
+            } else {
+                OperationStage::Failed
+            };
+            let _ = completion.sender.send(Some(progress));
+        }
+        result
     }
 
     pub fn cancel(self) -> OperationOutcome<T> {

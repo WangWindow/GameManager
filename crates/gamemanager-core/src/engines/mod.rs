@@ -8,4 +8,7 @@ pub use detection::DetectionMatch;
 pub use profile::{
     DetectionConfig, DetectionRuleDefinition, EngineMeta, EngineProfile, LaunchConfig,
 };
-pub use registry::{EngineDetail, EngineRegistry, EngineSummary, RegistryReport, RegistryWarning};
+pub use registry::{
+    EngineDetail, EngineRegistry, EngineRuleRequirement, EngineRuleSummary, EngineSummary,
+    RegistryReport, RegistryWarning,
+};

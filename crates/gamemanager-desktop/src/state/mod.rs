@@ -6,7 +6,10 @@ mod maintenance;
 mod operations;
 mod preferences;
 
-pub use dialogs::{DialogState, ImportDialogState, ScanDialogState};
+pub use dialogs::{
+    AppearanceDialogState, DeleteDialogState, DialogState, ImportDialogState, ScanDialogState,
+    UtilityDialog,
+};
 pub use engines::{EngineListState, EngineRow};
 pub use game_settings::{GameSettingsState, GameSettingsUpdate};
 pub use library::{LibraryMessage, LibraryState};

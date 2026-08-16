@@ -10,6 +10,7 @@ docs/superpowers
 node_modules
 dist
 temp
+/tests
 
 bun.lock
 Cargo.lock

@@ -134,7 +134,7 @@ pub(crate) fn simple_glob_match(pattern: &str, name: &str) -> bool {
 }
 
 #[cfg(unix)]
-fn is_native_executable(path: &Path) -> bool {
+pub(crate) fn is_native_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
     path.is_file()
@@ -147,6 +147,6 @@ fn is_native_executable(path: &Path) -> bool {
 }
 
 #[cfg(not(unix))]
-fn is_native_executable(_: &Path) -> bool {
+pub(crate) fn is_native_executable(_: &Path) -> bool {
     false
 }

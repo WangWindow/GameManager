@@ -2,7 +2,6 @@
 id = "rpgmakervx"
 name = "RPG Maker VX / VX Ace"
 category = "bottles"
-icon = "ri:window-line"
 priority = 3
 
 [detection]
@@ -34,13 +33,13 @@ weight = 2
 
 
 [[detection.optional]]
-type = "has_extension"
-ext = "rvdata"
+type = "file_exists"
+path = "Data/Scripts.rvdata"
 weight = 2
 
 [[detection.optional]]
-type = "has_extension"
-ext = "rvdata2"
+type = "file_exists"
+path = "Data/Scripts.rvdata2"
 weight = 2
 
 [launch]

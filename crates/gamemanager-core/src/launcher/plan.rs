@@ -374,11 +374,11 @@ impl Launcher {
     }
 
     fn apply_home_sandbox(&self, plan: &mut LaunchPlan, game: &GameRecord, config: &GameConfig) {
-        if config.sandbox_home {
-            if let Ok(user_data) = self.user_data_dir(&game.profile_key) {
-                plan.env
-                    .insert(OsString::from("HOME"), user_data.into_os_string());
-            }
+        if config.sandbox_home
+            && let Ok(user_data) = self.user_data_dir(&game.profile_key)
+        {
+            plan.env
+                .insert(OsString::from("HOME"), user_data.into_os_string());
         }
     }
 

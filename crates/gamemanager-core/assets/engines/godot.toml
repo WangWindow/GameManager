@@ -2,7 +2,6 @@
 id = "godot"
 name = "Godot"
 category = "other"
-icon = "ri:gamepad-line"
 priority = 6
 
 [detection]

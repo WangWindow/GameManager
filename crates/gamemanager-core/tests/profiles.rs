@@ -1,4 +1,4 @@
-use std::{fs, io::Cursor, path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, fs, io::Cursor, path::PathBuf, sync::Arc};
 
 use gamemanager_core::{
     CoverResolver, GameConfig, IconAsset, IconSource, ProfileStore, Result, Runner,
@@ -47,6 +47,24 @@ fn existing_settings_toml_round_trips_without_field_loss() -> Result<()> {
     assert_eq!(saved.runtime_version, Some("0.84.0".to_owned()));
     assert_eq!(saved.runner, Runner::Nwjs);
     assert_eq!(saved.args, ["--enable-webgl"]);
+    Ok(())
+}
+
+#[test]
+fn cleanup_only_removes_unreferenced_direct_profile_directories() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let profiles = ProfileStore::new(root.path());
+    profiles.ensure("live")?;
+    profiles.ensure("unused")?;
+    let profiles_dir = root.path().join("profiles");
+    fs::write(profiles_dir.join("note.txt"), "keep")?;
+
+    let removed = profiles.cleanup_unused(&BTreeSet::from(["live".to_owned()]))?;
+
+    assert_eq!(removed, 1);
+    assert!(profiles.profile_dir("live").is_dir());
+    assert!(!profiles.profile_dir("unused").exists());
+    assert!(profiles_dir.join("note.txt").is_file());
     Ok(())
 }
 

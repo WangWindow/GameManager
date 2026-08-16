@@ -4,6 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -112,16 +113,14 @@ impl GameLibraryService {
     }
 
     pub async fn list(&self) -> Result<Vec<GameSummary>> {
-        Ok(self
-            .database
-            .games()
-            .await?
-            .iter()
-            .map(GameSummary::from)
-            .collect())
+        let mut games = self.database.games().await?;
+        games.sort_by_key(|game| std::cmp::Reverse(game.last_played_at.unwrap_or(game.created_at)));
+        debug!(count = games.len(), "listed games");
+        Ok(games.iter().map(GameSummary::from).collect())
     }
 
     pub async fn import_game(&self, request: ImportRequest) -> Result<GameSummary> {
+        debug!(entry = %request.entry.path.display(), "resolving import entry");
         let entry = canonical_entry(&request.entry.path)?;
         let game_root = if entry.is_file() {
             entry
@@ -158,6 +157,13 @@ impl GameLibraryService {
             .clone()
             .or_else(|| detection.as_ref().map(|match_| match_.engine_id.clone()))
             .unwrap_or_else(|| "other".to_owned());
+        info!(
+            root = %game_root.display(),
+            entry = %entry.display(),
+            engine = %engine_id,
+            detected = detection.is_some(),
+            "resolved game import"
+        );
         let confidence = request.engine_id.as_ref().map_or_else(
             || detection.as_ref().map_or(0, |match_| match_.confidence),
             |_| 100,
@@ -205,12 +211,15 @@ impl GameLibraryService {
             let mut updated = game.clone();
             updated.cover_path = Some(cover.to_string_lossy().into_owned());
             self.database.update_game(&updated).await?;
+            info!(game_id = %updated.id, cover = %cover.display(), "game imported with cover");
             return Ok(GameSummary::from(&updated));
         }
+        info!(game_id = %game.id, title = %game.title, "game imported without cover");
         Ok(GameSummary::from(&game))
     }
 
     pub async fn update_game(&self, id: &str, request: UpdateGameRequest) -> Result<GameSummary> {
+        debug!(game_id = id, "updating game");
         let mut game = self
             .database
             .game(id)
@@ -221,19 +230,18 @@ impl GameLibraryService {
             .as_deref()
             .map(str::trim)
             .filter(|title| !title.is_empty())
+            && title != game.title
         {
-            if title != game.title {
-                let games = self.database.games().await?;
-                let used = games
-                    .iter()
-                    .filter(|other| other.id != id)
-                    .map(|other| other.profile_key.as_str())
-                    .collect::<HashSet<_>>();
-                let new_key = profile_key_for_title(title, &used);
-                self.profiles.rename(&game.profile_key, &new_key)?;
-                game.profile_key = new_key;
-                game.title = title.to_owned();
-            }
+            let games = self.database.games().await?;
+            let used = games
+                .iter()
+                .filter(|other| other.id != id)
+                .map(|other| other.profile_key.as_str())
+                .collect::<HashSet<_>>();
+            let new_key = profile_key_for_title(title, &used);
+            self.profiles.rename(&game.profile_key, &new_key)?;
+            game.profile_key = new_key;
+            game.title = title.to_owned();
         }
         if let Some(entry) = request.entry {
             let canonical = canonical_entry(&entry)?;
@@ -289,6 +297,7 @@ impl GameLibraryService {
     }
 
     pub async fn remove_game(&self, id: &str) -> Result<()> {
+        info!(game_id = id, "deleting game record");
         self.database
             .game(id)
             .await?
@@ -297,7 +306,9 @@ impl GameLibraryService {
     }
 
     pub async fn remove_all_games(&self) -> Result<()> {
-        for game in self.database.games().await? {
+        let games = self.database.games().await?;
+        warn!(count = games.len(), "deleting all game records");
+        for game in games {
             self.database.delete_game(&game.id).await?;
         }
         Ok(())
@@ -323,6 +334,19 @@ impl GameLibraryService {
         updated.updated_at = unix_timestamp();
         self.database.update_game(&updated).await?;
         Ok(GameSummary::from(&updated))
+    }
+
+    pub async fn set_custom_cover(&self, id: &str, source: &Path) -> Result<GameSummary> {
+        let mut game = self
+            .database
+            .game(id)
+            .await?
+            .ok_or_else(|| CoreError::Database(format!("game not found: {id}")))?;
+        let cover = self.covers.set_custom_cover(&game.profile_key, source)?;
+        game.cover_path = Some(cover.to_string_lossy().into_owned());
+        game.updated_at = unix_timestamp();
+        self.database.update_game(&game).await?;
+        Ok(GameSummary::from(&game))
     }
 }
 

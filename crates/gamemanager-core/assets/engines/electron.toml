@@ -2,7 +2,6 @@
 id = "electron"
 name = "Electron"
 category = "other"
-icon = "ri:cpu-line"
 priority = 9
 description = "Electron 打包的桌面游戏。"
 

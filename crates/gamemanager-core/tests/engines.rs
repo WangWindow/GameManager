@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
-use gamemanager_core::{DetectionContext, EngineRegistry};
+use gamemanager_core::{DetectionContext, EngineRegistry, EngineRuleRequirement};
 use tempfile::TempDir;
 
 #[test]
@@ -55,6 +55,26 @@ fn all_built_in_profiles_synchronize_and_validate() {
         report.registry.summaries().len(),
         EngineRegistry::builtin_profile_names().count()
     );
+}
+
+#[test]
+fn details_expose_detection_and_launch_information_for_the_engine_dialog() {
+    let directory = tempfile::tempdir().expect("temporary engine directory");
+    EngineRegistry::synchronize_builtin_profiles(directory.path()).expect("copy built-ins");
+    let registry = EngineRegistry::load(directory.path(), &BTreeMap::new()).registry;
+    let html = registry
+        .details()
+        .into_iter()
+        .find(|detail| detail.summary.id == "html")
+        .expect("HTML profile");
+
+    assert_eq!(html.minimum_score, 0);
+    assert!(
+        html.rules
+            .iter()
+            .any(|rule| matches!(rule.requirement, EngineRuleRequirement::Required))
+    );
+    assert!(!html.summary.entry_patterns.is_empty());
 }
 
 const HTML_PROFILE: &str = r#"

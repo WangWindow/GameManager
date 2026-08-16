@@ -12,7 +12,7 @@ pub struct AppSettings {
     pub container_root: String,
 }
 
-/// Appearance mode persisted in SQLite instead of WebView local storage.
+/// Appearance mode persisted in SQLite instead of browser local storage.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThemeMode {
@@ -30,6 +30,17 @@ pub enum GameViewMode {
     List,
 }
 
+/// Window backend preference. `Auto` follows the active desktop session and
+/// is used for existing installations that predate this setting.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowBackend {
+    #[default]
+    Auto,
+    Wayland,
+    X11,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiPreferences {
@@ -41,6 +52,8 @@ pub struct UiPreferences {
     pub view_mode: GameViewMode,
     #[serde(default)]
     pub search_query: String,
+    #[serde(default)]
+    pub window_backend: WindowBackend,
 }
 
 impl Default for UiPreferences {
@@ -50,6 +63,7 @@ impl Default for UiPreferences {
             show_status_bar: true,
             view_mode: GameViewMode::List,
             search_query: String::new(),
+            window_backend: WindowBackend::Auto,
         }
     }
 }

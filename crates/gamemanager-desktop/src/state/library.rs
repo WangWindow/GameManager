@@ -22,10 +22,12 @@ pub struct LibraryState {
 
 impl LibraryState {
     pub fn with_games(games: Vec<GameSummary>) -> Self {
-        Self {
+        let mut state = Self {
             games,
             ..Self::default()
-        }
+        };
+        state.sort_games();
+        state
     }
 
     pub fn games(&self) -> &[GameSummary] {
@@ -34,6 +36,7 @@ impl LibraryState {
 
     pub fn replace_games(&mut self, games: Vec<GameSummary>) {
         self.games = games;
+        self.sort_games();
     }
 
     pub fn apply_game(&mut self, game: GameSummary) {
@@ -46,6 +49,7 @@ impl LibraryState {
         } else {
             self.games.push(game);
         }
+        self.sort_games();
     }
 
     pub fn remove_game(&mut self, game_id: &str) {
@@ -61,7 +65,6 @@ impl LibraryState {
                 query.is_empty()
                     || game.title.to_lowercase().contains(&query)
                     || game.engine_type.to_lowercase().contains(&query)
-                    || game.game_type.to_lowercase().contains(&query)
             })
             .collect()
     }
@@ -79,6 +82,24 @@ impl LibraryState {
         self.launching.contains(game_id)
     }
 
+    pub fn relative_played_time(last_played_at: Option<i64>, now: i64) -> Option<String> {
+        let timestamp = last_played_at?;
+        let seconds = now.saturating_sub(timestamp);
+        let minutes = seconds / 60;
+        let hours = minutes / 60;
+        let days = hours / 24;
+
+        Some(if days > 0 {
+            format!("{days} 天前")
+        } else if hours > 0 {
+            format!("{hours} 小时前")
+        } else if minutes > 0 {
+            format!("{minutes} 分钟前")
+        } else {
+            "刚刚".to_owned()
+        })
+    }
+
     pub fn apply(&mut self, message: LibraryMessage) {
         match message {
             LibraryMessage::SearchChanged(query) => self.search_query = query,
@@ -92,5 +113,10 @@ impl LibraryState {
             } => self.finish_launch(&game_id),
             LibraryMessage::EditRequested(_) | LibraryMessage::DeleteRequested(_) => {}
         }
+    }
+
+    fn sort_games(&mut self) {
+        self.games
+            .sort_by_key(|game| std::cmp::Reverse(game.last_played_at.unwrap_or(game.created_at)));
     }
 }

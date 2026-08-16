@@ -23,8 +23,16 @@ impl ScanRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScanPlan {
     pub candidates: Vec<PathBuf>,
+    pub entry_candidates: Vec<ScanCandidate>,
     pub enabled_engine_ids: Vec<String>,
     pub scanned_directories: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScanCandidate {
+    pub game_root: PathBuf,
+    pub entry_path: PathBuf,
+    pub engine_id: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +70,7 @@ impl ScanPlanner {
 
         let mut queue = vec![(request.root.clone(), 0_u32)];
         let mut candidates = Vec::new();
+        let mut entry_candidates = Vec::new();
         let mut scanned_directories = 0;
 
         while let Some((directory, depth)) = queue.pop() {
@@ -73,8 +82,16 @@ impl ScanPlanner {
             let context = FsDetectionContext::new(directory.clone());
             if let Some(detection) = self.registry.detect(&context)
                 && enabled.contains(&detection.engine_id)
+                && let Some(entry_path) = self
+                    .registry
+                    .resolve_entry(&detection.engine_id, &directory)
             {
                 candidates.push(directory.clone());
+                entry_candidates.push(ScanCandidate {
+                    game_root: directory.clone(),
+                    entry_path,
+                    engine_id: detection.engine_id,
+                });
             }
 
             if depth >= request.max_depth {
@@ -99,8 +116,11 @@ impl ScanPlanner {
 
         candidates.sort();
         candidates.dedup();
+        entry_candidates.sort_by(|left, right| left.game_root.cmp(&right.game_root));
+        entry_candidates.dedup_by(|left, right| left.game_root == right.game_root);
         Ok(ScanPlan {
             candidates,
+            entry_candidates,
             enabled_engine_ids,
             scanned_directories,
         })

@@ -20,20 +20,23 @@ pub use core::{BootstrapSnapshot, GameManagerCore, IntegrationStatus, RuntimeSta
 pub use db::Database;
 pub use engines::{
     DetectionConfig, DetectionContext, DetectionMatch, DetectionRuleDefinition, EngineDetail,
-    EngineMeta, EngineProfile, EngineRegistry, EngineSummary, FsDetectionContext, LaunchConfig,
-    RegistryReport, RegistryWarning,
+    EngineMeta, EngineProfile, EngineRegistry, EngineRuleRequirement, EngineRuleSummary,
+    EngineSummary, FsDetectionContext, LaunchConfig, RegistryReport, RegistryWarning,
 };
 pub use error::{CoreError, Result};
 pub use game_library::{
-    EntryPoint, GameLibraryService, ImportRequest, ScanPlan, ScanPlanner, ScanRequest, ScanResult,
-    UpdateGameRequest,
+    EntryPoint, GameLibraryService, ImportRequest, ScanCandidate, ScanPlan, ScanPlanner,
+    ScanRequest, ScanResult, UpdateGameRequest,
 };
-pub use integrations::BottlesCli;
+pub use integrations::{
+    BottlesCli, BottlesCliLocator, BottlesCommandOutput, BottlesCommandRunner,
+    SystemBottlesCliLocator,
+};
 pub use launcher::{LaunchPlan, LaunchResult, Launcher};
 pub use models::{
     AppSettings, EngineRecord, GameConfig, GameRecord, GameSummary, GameViewMode, Runner,
     SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,
-    SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ThemeMode, UiPreferences,
+    SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ThemeMode, UiPreferences, WindowBackend,
 };
 pub use operation::{Operation, OperationId, OperationOutcome, OperationProgress, OperationStage};
 pub use paths::AppPaths;

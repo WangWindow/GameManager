@@ -1,9 +1,13 @@
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::{CoreError, Result};
 
 use super::{
-    context::DetectionContext,
+    context::{DetectionContext, is_native_executable, simple_glob_match},
     detection::{DetectionMatch, confidence_score, evaluate_rule, optional_score},
     profile::EngineProfile,
 };
@@ -60,7 +64,6 @@ pub struct EngineSummary {
     pub id: String,
     pub name: String,
     pub category: String,
-    pub icon: String,
     pub priority: i32,
     pub description: String,
     pub enabled: bool,
@@ -72,8 +75,36 @@ pub struct EngineDetail {
     pub summary: EngineSummary,
     pub valid: bool,
     pub rule_count: usize,
+    pub minimum_score: i32,
+    pub rules: Vec<EngineRuleSummary>,
     pub strategy: String,
+    pub exclude_patterns: Vec<String>,
     pub errors: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EngineRuleRequirement {
+    Required,
+    Optional,
+    Forbidden,
+}
+
+impl EngineRuleRequirement {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Required => "required",
+            Self::Optional => "optional",
+            Self::Forbidden => "forbidden",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EngineRuleSummary {
+    pub requirement: EngineRuleRequirement,
+    pub rule_type: String,
+    pub target: String,
+    pub weight: Option<i32>,
 }
 
 #[derive(Clone, Debug)]
@@ -305,7 +336,10 @@ impl EngineRegistry {
                 summary: entry.summary(),
                 valid: entry.valid,
                 rule_count: entry.profile.detection.rule_count(),
+                minimum_score: entry.profile.detection.min_score,
+                rules: entry.rule_summaries(),
                 strategy: entry.profile.launch.strategy.clone(),
+                exclude_patterns: entry.profile.launch.exclude_patterns.clone(),
                 errors: entry.errors.clone(),
             })
             .collect::<Vec<_>>();
@@ -317,11 +351,57 @@ impl EngineRegistry {
         self.entries.get(id).map(|entry| &entry.profile)
     }
 
+    /// Resolves the launch entry for an already-detected game root. The
+    /// profile order is significant: a native entry wins over a Windows
+    /// executable when both are present, matching manual import behaviour.
+    pub fn resolve_entry(&self, id: &str, game_root: &Path) -> Option<PathBuf> {
+        let profile = self.profile(id)?;
+        if profile.launch.entry_patterns.is_empty() {
+            return game_root.is_dir().then(|| game_root.to_path_buf());
+        }
+
+        let mut entries = fs::read_dir(game_root)
+            .ok()?
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file())
+            .collect::<Vec<_>>();
+        entries.sort();
+
+        for pattern in &profile.launch.entry_patterns {
+            let candidate = if pattern == "@native" {
+                entries.iter().find(|path| is_native_executable(path))
+            } else {
+                entries.iter().find(|path| {
+                    let name = path.file_name().and_then(|name| name.to_str());
+                    name.is_some_and(|name| simple_glob_match(pattern, name))
+                })
+            };
+            if let Some(candidate) = candidate
+                && !is_excluded(candidate, &profile.launch.exclude_patterns)
+            {
+                return Some(candidate.clone());
+            }
+        }
+
+        None
+    }
+
     pub fn should_skip_scan(&self, id: &str) -> bool {
         self.entries
             .get(id)
             .is_some_and(|entry| entry.profile.meta.skip_scan)
     }
+}
+
+fn is_excluded(path: &Path, patterns: &[String]) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    patterns
+        .iter()
+        .any(|pattern| simple_glob_match(pattern, name))
 }
 
 impl EngineEntry {
@@ -330,11 +410,53 @@ impl EngineEntry {
             id: self.profile.meta.id.clone(),
             name: self.profile.meta.name.clone(),
             category: self.profile.meta.category.clone(),
-            icon: self.profile.meta.icon.clone(),
             priority: self.profile.meta.priority,
             description: self.profile.meta.description.clone(),
             enabled: self.enabled,
             entry_patterns: self.profile.launch.entry_patterns.clone(),
+        }
+    }
+
+    fn rule_summaries(&self) -> Vec<EngineRuleSummary> {
+        let detection = &self.profile.detection;
+        detection
+            .required
+            .iter()
+            .map(|rule| EngineRuleSummary::from_rule(EngineRuleRequirement::Required, rule))
+            .chain(
+                detection.optional.iter().map(|rule| {
+                    EngineRuleSummary::from_rule(EngineRuleRequirement::Optional, rule)
+                }),
+            )
+            .chain(
+                detection.forbidden.iter().map(|rule| {
+                    EngineRuleSummary::from_rule(EngineRuleRequirement::Forbidden, rule)
+                }),
+            )
+            .collect()
+    }
+}
+
+impl EngineRuleSummary {
+    fn from_rule(
+        requirement: EngineRuleRequirement,
+        rule: &super::profile::DetectionRuleDefinition,
+    ) -> Self {
+        let target = if !rule.path.is_empty() {
+            rule.path.clone()
+        } else if !rule.pattern.is_empty() {
+            rule.pattern.clone()
+        } else if !rule.extension.is_empty() {
+            rule.extension.clone()
+        } else {
+            String::new()
+        };
+
+        Self {
+            requirement,
+            rule_type: rule.rule_type.clone(),
+            target,
+            weight: (requirement == EngineRuleRequirement::Optional).then_some(rule.weight),
         }
     }
 }

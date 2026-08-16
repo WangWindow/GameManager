@@ -94,6 +94,11 @@ impl CoverResolver {
         &self.profiles
     }
 
+    /// Copies a user-selected cover into the managed profile directory.
+    pub fn set_custom_cover(&self, profile_key: &str, source: &Path) -> Result<PathBuf> {
+        self.copy_image(profile_key, source)
+    }
+
     fn save_icon(&self, profile_key: &str, asset: IconAsset) -> Result<PathBuf> {
         let (bytes, extension) = match asset {
             IconAsset::Png(bytes) => (bytes, "png"),

@@ -8,6 +8,7 @@ pub use nwjs::{
 };
 
 use std::{path::Path, sync::Arc};
+use tracing::{debug, info};
 
 use crate::{AppPaths, Operation, Result};
 
@@ -21,7 +22,7 @@ impl RuntimeManager {
     pub fn new(paths: AppPaths) -> Self {
         Self {
             paths,
-            client: Arc::new(nwjs::UnavailableHttpClient),
+            client: Arc::new(nwjs::ReqwestHttpClient::new()),
         }
     }
 
@@ -51,9 +52,10 @@ impl RuntimeManager {
         flavor: NwjsFlavor,
         target: String,
     ) -> Operation<NwjsInstallResult> {
+        info!(version = %version, ?flavor, target = %target, "NW.js download scheduled");
         let client = self.client.clone();
         let paths = self.paths.clone();
-        Operation::from_future("download", async move {
+        Operation::from_future("下载 NW.js", async move {
             nwjs::download_and_install(&paths, client, &version, flavor, &target).await
         })
     }
@@ -67,11 +69,24 @@ impl RuntimeManager {
         self.download_nwjs(version, flavor, target)
     }
 
+    pub fn download_latest_nwjs(&self, flavor: NwjsFlavor) -> Operation<NwjsInstallResult> {
+        info!(?flavor, "latest NW.js download scheduled");
+        let client = self.client.clone();
+        let paths = self.paths.clone();
+        Operation::from_future("下载 NW.js", async move {
+            let version = nwjs::fetch_stable_version(client.clone()).await?;
+            let target = nwjs::current_target()?;
+            nwjs::download_and_install(&paths, client, &version, flavor, &target).await
+        })
+    }
+
     pub fn import_mkxpz_archive(&self, archive_path: &Path) -> Result<MkxpzInstallResult> {
+        info!(archive = %archive_path.display(), "importing mkxp-z archive");
         import_mkxpz_archive(&self.paths, archive_path)
     }
 
     pub fn remove_engine(&self, path: &Path) -> Result<()> {
+        debug!(path = %path.display(), "removing runtime");
         if path.exists() {
             std::fs::remove_dir_all(path)?;
         }

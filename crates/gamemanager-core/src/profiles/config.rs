@@ -1,4 +1,7 @@
-use std::path::{Component, Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Component, Path, PathBuf},
+};
 
 use crate::{CoreError, GameConfig, Result};
 
@@ -88,6 +91,38 @@ impl ProfileStore {
         )?;
         std::fs::rename(source, target)?;
         Ok(())
+    }
+
+    /// Removes direct profile directories that are no longer referenced by the
+    /// library. Files and symlinks are deliberately ignored: cleanup must
+    /// never follow a link outside the configured container root.
+    pub fn cleanup_unused(&self, live_profile_keys: &BTreeSet<String>) -> Result<usize> {
+        let profiles_dir = self.container_root.join("profiles");
+        if !profiles_dir.exists() {
+            return Ok(0);
+        }
+
+        let mut removed = 0;
+        for entry in std::fs::read_dir(&profiles_dir)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if !file_type.is_dir() || file_type.is_symlink() {
+                continue;
+            }
+
+            let Some(profile_key) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if validate_profile_key(&profile_key).is_err()
+                || live_profile_keys.contains(&profile_key)
+            {
+                continue;
+            }
+
+            std::fs::remove_dir_all(entry.path())?;
+            removed += 1;
+        }
+        Ok(removed)
     }
 }
 

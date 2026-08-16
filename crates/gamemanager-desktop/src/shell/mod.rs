@@ -4,4 +4,4 @@ mod window_frame;
 
 pub use theme::{AppTheme, ShellState};
 pub use toast::Toast;
-pub use window_frame::WindowAction;
+pub use window_frame::{resize_handles, route_event};

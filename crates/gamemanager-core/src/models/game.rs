@@ -105,6 +105,7 @@ pub struct GameSummary {
     pub runtime_version: Option<String>,
     pub cover_path: Option<String>,
     pub play_count: i64,
+    pub created_at: i64,
     pub last_played_at: Option<i64>,
 }
 
@@ -121,6 +122,7 @@ impl From<&GameRecord> for GameSummary {
             runtime_version: game.runtime_version.clone(),
             cover_path: game.cover_path.clone(),
             play_count: game.play_count,
+            created_at: game.created_at,
             last_played_at: game.last_played_at,
         }
     }

@@ -2,7 +2,6 @@
 id = "renpy"
 name = "Ren'Py"
 category = "renpy"
-icon = "ri:slideshow-line"
 priority = 0
 
 [detection]

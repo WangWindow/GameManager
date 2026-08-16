@@ -29,8 +29,6 @@ pub struct EngineMeta {
     pub name: String,
     #[serde(default = "default_category")]
     pub category: String,
-    #[serde(default = "default_icon")]
-    pub icon: String,
     #[serde(default)]
     pub priority: i32,
     #[serde(default)]
@@ -181,10 +179,6 @@ impl LaunchConfig {
 
 fn default_category() -> String {
     "other".to_owned()
-}
-
-fn default_icon() -> String {
-    "ri:question-line".to_owned()
 }
 
 fn default_weight() -> i32 {

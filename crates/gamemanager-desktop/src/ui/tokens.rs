@@ -1,0 +1,47 @@
+pub struct UiTokens;
+
+impl UiTokens {
+    pub const WINDOW_BORDER: f32 = 1.0;
+    pub const WINDOW_RADIUS: f32 = 12.0;
+    pub const TITLE_BAR_HEIGHT: f32 = 40.0;
+    pub const TITLE_BAR_PADDING_X: f32 = 12.0;
+    pub const BRAND_ICON_BOX_WIDTH: f32 = 28.0;
+    pub const BRAND_ICON_BOX_HEIGHT: f32 = 28.0;
+    pub const BRAND_ICON_SIZE: f32 = 18.0;
+    pub const TITLE_TEXT_SIZE: f32 = 14.0;
+    pub const TITLE_ACTION_TEXT_SIZE: f32 = 12.0;
+    pub const TITLE_ACTION_HEIGHT: f32 = 32.0;
+    pub const TITLE_ACTION_WIDTH: f32 = 32.0;
+    pub const TITLE_MENU_WIDTH: f32 = 192.0;
+    pub const TITLE_MENU_RIGHT_PADDING: f32 = 56.0;
+    pub const WINDOW_ACTION_WIDTH: f32 = 36.0;
+    pub const RESIZE_EDGE_SIZE: f32 = 6.0;
+    pub const RESIZE_CORNER_SIZE: f32 = 10.0;
+    pub const CONTENT_MAX_WIDTH: f32 = 1536.0;
+    pub const CONTENT_PADDING_Y: f32 = 24.0;
+    pub const LIBRARY_HEADING_SIZE: f32 = 24.0;
+    pub const SEARCH_MAX_WIDTH: f32 = 512.0;
+    pub const CONTROL_HEIGHT: f32 = 32.0;
+    pub const CARD_RADIUS: f32 = 12.0;
+    pub const CARD_PADDING_X: f32 = 16.0;
+    pub const CARD_PADDING_Y: f32 = 10.0;
+    pub const CARD_COVER_SIZE: f32 = 48.0;
+    pub const CARD_EMPTY_ICON_SIZE: f32 = 24.0;
+    pub const CARD_ACTION_SIZE: f32 = 28.0;
+    pub const CARD_GAP: f32 = 12.0;
+    pub const CARD_TITLE_SIZE: f32 = 14.0;
+    pub const CARD_METADATA_SIZE: f32 = 12.0;
+    pub const EMPTY_STATE_ICON_SIZE: f32 = 40.0;
+    pub const STATUS_BAR_HEIGHT: f32 = 32.0;
+    pub const STATUS_PROGRESS_WIDTH: f32 = 160.0;
+    pub const STATUS_PROGRESS_HEIGHT: f32 = 6.0;
+    pub const STATUS_TEXT_SIZE: f32 = 12.0;
+    pub const DIALOG_PADDING: f32 = 20.0;
+    pub const DIALOG_GAP: f32 = 16.0;
+    pub const DIALOG_MAX_NARROW: f32 = 448.0;
+    pub const DIALOG_MAX_WIDE: f32 = 512.0;
+    pub const DIALOG_VIEWPORT_MARGIN: f32 = 16.0;
+    pub const FORM_ROW_HEIGHT: f32 = 32.0;
+    pub const FORM_ROW_GAP: f32 = 12.0;
+    pub const FORM_SECTION_HEIGHT: f32 = 1.0;
+}

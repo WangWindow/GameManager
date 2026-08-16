@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, fs};
 
 use gamemanager_core::{
-    AppPaths, Database, EngineRegistry, GameLibraryService, ImportRequest, ProfileStore, Runner,
-    ScanPlanner, ScanRequest, UpdateGameRequest,
+    AppPaths, Database, DetectionContext, EngineRegistry, FsDetectionContext, GameLibraryService,
+    GameRecord, ImportRequest, ProfileStore, Runner, ScanPlanner, ScanRequest, UpdateGameRequest,
 };
 use tempfile::TempDir;
 
@@ -33,6 +33,27 @@ async fn importing_an_entry_creates_profile_and_uses_detected_runner()
             .entry_path,
         fs::canonicalize(&entry)?.to_string_lossy()
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn list_sorts_by_last_played_then_created_at() -> gamemanager_core::Result<()> {
+    let test = TestLibrary::new().await?;
+    for game in [
+        game_record("created-later", 30, None),
+        game_record("played-later", 10, Some(40)),
+        game_record("created-earlier", 20, None),
+    ] {
+        test.service.database().insert_game(&game).await?;
+    }
+
+    let games = test.service.list().await?;
+    let ids = games
+        .iter()
+        .map(|game| game.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["played-later", "created-later", "created-earlier"]);
+    assert_eq!(games[0].created_at, 10);
     Ok(())
 }
 
@@ -95,6 +116,41 @@ fn scan_plan_skips_runtime_directories_and_disabled_engines() -> gamemanager_cor
     Ok(())
 }
 
+#[test]
+fn scan_plan_resolves_the_profile_entry_before_importing() -> gamemanager_core::Result<()> {
+    let root = tempfile::tempdir()?;
+    let game = root.path().join("vx-ace");
+    fs::create_dir_all(game.join("Data"))?;
+    fs::write(game.join("Game.ini"), "[Game]\nTitle=Test\n")?;
+    fs::write(game.join("Game.exe"), [])?;
+    fs::write(game.join("Data/Scripts.rvdata2"), [])?;
+
+    let engines = tempfile::tempdir()?;
+    EngineRegistry::synchronize_builtin_profiles(engines.path())?;
+    let registry = EngineRegistry::load(engines.path(), &BTreeMap::new()).registry;
+    let context = FsDetectionContext::new(&game);
+    assert!(context.file_exists("Game.ini"));
+    assert!(context.file_exists("Game.exe"));
+    assert!(context.file_exists("Data/Scripts.rvdata2"));
+    assert_eq!(
+        registry
+            .detect(&context)
+            .map(|detection| detection.engine_id),
+        Some("rpgmakervx".to_owned())
+    );
+    let plan = ScanPlanner::new(registry).plan(ScanRequest::new(root.path(), 2))?;
+
+    assert_eq!(plan.candidates, vec![game.clone()]);
+    assert_eq!(plan.entry_candidates.len(), 1);
+    assert_eq!(plan.entry_candidates[0].engine_id, "rpgmakervx");
+    assert_eq!(plan.entry_candidates[0].game_root, game);
+    assert_eq!(
+        plan.entry_candidates[0].entry_path,
+        root.path().join("vx-ace/Game.exe")
+    );
+    Ok(())
+}
+
 struct TestLibrary {
     root: TempDir,
     service: GameLibraryService,
@@ -113,5 +169,25 @@ impl TestLibrary {
             root,
             service: GameLibraryService::new(database, profiles, registry),
         })
+    }
+}
+
+fn game_record(id: &str, created_at: i64, last_played_at: Option<i64>) -> GameRecord {
+    GameRecord {
+        id: id.to_owned(),
+        profile_key: id.to_owned(),
+        title: id.to_owned(),
+        engine_type: "other".to_owned(),
+        game_path: format!("/games/{id}"),
+        normalized_path: format!("/games/{id}"),
+        game_type: "other".to_owned(),
+        detection_confidence: 0,
+        runtime_version: None,
+        cover_path: None,
+        play_count: 0,
+        metadata_json: None,
+        created_at,
+        last_played_at,
+        updated_at: created_at,
     }
 }

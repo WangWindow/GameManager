@@ -6,6 +6,8 @@ use std::{
 };
 
 use futures_util::future::BoxFuture;
+use serde::Deserialize;
+use tracing::{debug, info};
 
 use crate::{CoreError, Result};
 
@@ -35,15 +37,66 @@ pub trait HttpClient: Send + Sync {
     fn get(&self, url: &str) -> BoxFuture<'static, Result<Vec<u8>>>;
 }
 
-pub(crate) struct UnavailableHttpClient;
-impl HttpClient for UnavailableHttpClient {
-    fn get(&self, _: &str) -> BoxFuture<'static, Result<Vec<u8>>> {
-        Box::pin(async {
-            Err(CoreError::Engine(
-                "network client is not configured".to_owned(),
-            ))
+#[derive(Clone)]
+pub struct ReqwestHttpClient {
+    client: reqwest::Client,
+}
+
+impl ReqwestHttpClient {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+}
+
+impl Default for ReqwestHttpClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HttpClient for ReqwestHttpClient {
+    fn get(&self, url: &str) -> BoxFuture<'static, Result<Vec<u8>>> {
+        let client = self.client.clone();
+        let url = url.to_owned();
+        Box::pin(async move {
+            client
+                .get(url)
+                .send()
+                .await
+                .map_err(|error| CoreError::Engine(format!("network request failed: {error}")))?
+                .error_for_status()
+                .map_err(|error| CoreError::Engine(format!("network request failed: {error}")))?
+                .bytes()
+                .await
+                .map(|bytes| bytes.to_vec())
+                .map_err(|error| CoreError::Engine(format!("network response failed: {error}")))
         })
     }
+}
+
+#[derive(Deserialize)]
+struct VersionsJson {
+    stable: Option<String>,
+    latest: Option<String>,
+}
+
+pub(crate) async fn fetch_stable_version(client: Arc<dyn HttpClient>) -> Result<String> {
+    debug!("fetching NW.js stable version");
+    let response = client.get("https://nwjs.io/versions.json").await?;
+    let versions: VersionsJson = serde_json::from_slice(&response)
+        .map_err(|error| CoreError::Engine(format!("invalid NW.js versions response: {error}")))?;
+    let version = versions
+        .stable
+        .or(versions.latest)
+        .map(|version| version.trim().trim_start_matches(['v', 'V']).to_owned())
+        .filter(|version| !version.is_empty())
+        .ok_or_else(|| {
+            CoreError::Engine("NW.js versions response has no stable version".to_owned())
+        })?;
+    info!(version = %version, "NW.js stable version resolved");
+    Ok(version)
 }
 
 pub fn current_target() -> Result<String> {
@@ -85,7 +138,9 @@ pub(crate) async fn download_and_install(
     target: &str,
 ) -> Result<NwjsInstallResult> {
     let url = build_download_url(version, flavor, target);
+    info!(version = %version, ?flavor, target = %target, url = %url, "downloading NW.js runtime");
     let archive = client.get(&url).await?;
+    debug!(bytes = archive.len(), "NW.js archive downloaded");
     let root = paths.nwjs_runtime_root();
     let staging = root.join(format!(".staging-{version}-{target}"));
     if staging.exists() {
@@ -109,6 +164,7 @@ pub(crate) async fn download_and_install(
     } else {
         extract_zip(&archive_path, &extract)?;
     }
+    debug!(path = %extract.display(), "NW.js archive extracted");
     let source = single_root(&extract).unwrap_or(extract.clone());
     let install = root
         .join(version)
@@ -127,12 +183,14 @@ pub(crate) async fn download_and_install(
     )?;
     copy_dir(&source, &install)?;
     std::fs::remove_dir_all(staging)?;
-    Ok(NwjsInstallResult {
+    let result = NwjsInstallResult {
         version: version.to_owned(),
         flavor,
         target: target.to_owned(),
         install_dir: install,
-    })
+    };
+    info!(path = %result.install_dir.display(), "NW.js runtime installed");
+    Ok(result)
 }
 
 fn extract_zip(archive: &Path, destination: &Path) -> Result<()> {
