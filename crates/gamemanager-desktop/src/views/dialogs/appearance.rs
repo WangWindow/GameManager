@@ -145,6 +145,15 @@ pub fn view<'a>(
                 .disabled(disabled)
                 .on_toggle(Message::StatusBarChanged),
         ),
+        form_row(
+            text("记住窗口大小")
+                .size(14)
+                .color(theme.palette.muted_foreground),
+            Switch::new(theme)
+                .checked(preferences.value().remember_window_size)
+                .disabled(disabled)
+                .on_toggle(Message::RememberWindowSizeChanged),
+        ),
         rule::horizontal(1),
         form_row(
             text("容器根目录")

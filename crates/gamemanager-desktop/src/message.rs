@@ -33,6 +33,7 @@ pub enum WindowMessage {
     FileDropped(std::path::PathBuf),
     FilesHoveredLeft,
     Focused(bool),
+    Resized(iced::Size),
 }
 
 #[derive(Clone)]
@@ -120,6 +121,9 @@ pub enum Message {
     ConfirmRemoveAllGames,
     AllGamesRemoved(Result<usize, String>),
     StatusBarChanged(bool),
+    RememberWindowSizeChanged(bool),
+    WindowSizeSettled([u32; 2]),
+    WindowSizeSave([u32; 2]),
     PreferencesPersistDue(u64),
     PreferencesSaved {
         revision: u64,

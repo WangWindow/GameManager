@@ -37,4 +37,6 @@ fn ui_preferences_do_not_require_browser_local_storage() {
     assert!(preferences.show_status_bar);
     assert!(preferences.search_query.is_empty());
     assert_eq!(preferences.window_backend, WindowBackend::Auto);
+    assert!(preferences.remember_window_size);
+    assert_eq!(preferences.window_size, None);
 }

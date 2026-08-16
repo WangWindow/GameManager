@@ -86,6 +86,7 @@ impl DesktopApp {
             .window(window::Settings {
                 decorations: false,
                 resizable: true,
+                size: load_initial_window_size(),
                 ..window::Settings::default()
             });
         for font in iced_shadcn_v2::fonts::ALL_FACES {
@@ -132,6 +133,37 @@ impl DesktopApp {
             Message::Window(WindowMessage::FileHovered(_)) => self.dialogs.import.begin_drop(),
             Message::Window(WindowMessage::FilesHoveredLeft) => self.dialogs.import.end_drop(),
             Message::Window(WindowMessage::Focused(_)) => {}
+            Message::Window(WindowMessage::Resized(size)) => {
+                if self.preferences.value().remember_window_size {
+                    let size = [size.width as u32, size.height as u32];
+                    return Task::perform(
+                        async move {
+                            tokio::time::sleep(Duration::from_millis(300)).await;
+                            size
+                        },
+                        Message::WindowSizeSettled,
+                    );
+                }
+                return Task::none();
+            }
+            Message::WindowSizeSettled(size) => {
+                return window::latest().then(move |id| {
+                    let Some(id) = id else {
+                        return Task::none();
+                    };
+                    window::is_maximized(id).then(move |maximized| {
+                        if maximized {
+                            Task::none()
+                        } else {
+                            Task::done(Message::WindowSizeSave(size))
+                        }
+                    })
+                });
+            }
+            Message::WindowSizeSave(size) => {
+                self.preferences.set_window_size(size);
+                return self.save_preferences_task();
+            }
             Message::Library(message) => match message {
                 crate::state::LibraryMessage::DeleteRequested(game_id) => {
                     if let Some(game) = self.library.games().iter().find(|game| game.id == game_id)
@@ -596,6 +628,12 @@ impl DesktopApp {
             Message::ToggleEngineExpanded(id) => self.engines.toggle_expanded(&id),
             Message::StatusBarChanged(show) => {
                 self.preferences.set_show_status_bar(show);
+                if self.core.is_some() {
+                    return self.save_preferences_task();
+                }
+            }
+            Message::RememberWindowSizeChanged(remember) => {
+                self.preferences.set_remember_window_size(remember);
                 if self.core.is_some() {
                     return self.save_preferences_task();
                 }
@@ -1160,6 +1198,27 @@ fn bootstrap_task() -> Task<Message> {
         },
         Message::BootstrapFinished,
     )
+}
+
+fn load_initial_window_size() -> iced::Size {
+    let fallback = window::Settings::default().size;
+    let Ok(paths) = AppPaths::discover() else {
+        return fallback;
+    };
+    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return fallback;
+    };
+    match runtime.block_on(GameManagerCore::read_ui_preferences(&paths)) {
+        Ok(preferences) if preferences.remember_window_size => preferences
+            .window_size
+            .map_or(fallback, |[width, height]| {
+                iced::Size::new(width as f32, height as f32)
+            }),
+        _ => fallback,
+    }
 }
 
 fn window_task(action: WindowAction) -> Task<Message> {

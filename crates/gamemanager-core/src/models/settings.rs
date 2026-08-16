@@ -54,6 +54,10 @@ pub struct UiPreferences {
     pub search_query: String,
     #[serde(default)]
     pub window_backend: WindowBackend,
+    #[serde(default = "default_true")]
+    pub remember_window_size: bool,
+    #[serde(default)]
+    pub window_size: Option<[u32; 2]>,
 }
 
 impl Default for UiPreferences {
@@ -64,6 +68,8 @@ impl Default for UiPreferences {
             view_mode: GameViewMode::List,
             search_query: String::new(),
             window_backend: WindowBackend::Auto,
+            remember_window_size: true,
+            window_size: None,
         }
     }
 }

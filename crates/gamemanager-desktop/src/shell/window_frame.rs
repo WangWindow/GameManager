@@ -32,6 +32,9 @@ pub fn route_event(event: &Event) -> Option<Message> {
         Event::Window(window::Event::Unfocused) => {
             Some(Message::Window(WindowMessage::Focused(false)))
         }
+        Event::Window(window::Event::Resized(size)) => {
+            Some(Message::Window(WindowMessage::Resized(*size)))
+        }
         _ => None,
     }
 }

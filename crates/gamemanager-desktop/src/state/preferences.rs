@@ -70,6 +70,20 @@ impl PreferencesState {
         }
     }
 
+    pub fn set_remember_window_size(&mut self, remember: bool) {
+        if self.value.remember_window_size != remember {
+            self.value.remember_window_size = remember;
+            self.mark_dirty();
+        }
+    }
+
+    pub fn set_window_size(&mut self, size: [u32; 2]) {
+        if self.value.window_size != Some(size) {
+            self.value.window_size = Some(size);
+            self.mark_dirty();
+        }
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
