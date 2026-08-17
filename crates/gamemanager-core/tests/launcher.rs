@@ -75,6 +75,18 @@ fn mkxpz_plan_keeps_profile_config_and_sandboxes_home() -> gamemanager_core::Res
 }
 
 #[test]
+fn bottles_plan_does_not_override_home() -> gamemanager_core::Result<()> {
+    let fixture = Fixture::new()?;
+    let mut config = fixture.bottles_config();
+    config.sandbox_home = true;
+
+    let plan = fixture.launcher.plan(&fixture.bottles_game, &config)?;
+
+    assert!(plan.env.is_empty(), "Bottles plan must not set HOME");
+    Ok(())
+}
+
+#[test]
 fn nwjs_plan_uses_user_and_crash_directories() -> gamemanager_core::Result<()> {
     let fixture = Fixture::new()?;
     let plan = fixture

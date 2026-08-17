@@ -143,7 +143,7 @@ impl Launcher {
 
     fn plan_bottles(
         &self,
-        game: &GameRecord,
+        _game: &GameRecord,
         config: &GameConfig,
         root: &Path,
     ) -> Result<LaunchPlan> {
@@ -164,14 +164,13 @@ impl Launcher {
             .as_ref()
             .ok_or_else(|| CoreError::Configuration("Bottles CLI is not configured".to_owned()))?;
         let (program, args) = cli.plan_run(bottle, &entry, &config.args);
-        let mut plan = LaunchPlan {
+        let plan = LaunchPlan {
             program,
             args,
             current_dir: root.to_path_buf(),
             env: BTreeMap::new(),
             runner: Runner::Bottles,
         };
-        self.apply_home_sandbox(&mut plan, game, config);
         Ok(plan)
     }
 
