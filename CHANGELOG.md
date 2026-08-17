@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.1] - 2026-08-17
+
+- chore(release): 0.10.1 (7de6eba)
+- fix(core): stop overriding HOME for Bottles CLI launches (164f5bc)
+- ci: remove .github/workflows/ci.yml (ab869cc)
+- feat(desktop): remember window size between launches (db2016a)
+- ci: split quality checks from release workflow (c9e70a6)
+
+
 ## [0.10.0] - 2026-08-16
 
 - feat: complete 0.10 migration (8de3e93)
