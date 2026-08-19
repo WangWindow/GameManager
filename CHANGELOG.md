@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.2] - 2026-08-19
+
+- chore(release): 0.10.2 (c0c4391)
+- feat(core): enhance NW.js package resolution and icon extraction (a4d629e)
+
+
 ## [0.10.1] - 2026-08-17
 
 - chore(release): 0.10.1 (7de6eba)
