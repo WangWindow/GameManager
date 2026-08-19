@@ -95,13 +95,14 @@ impl ScanPlanner {
             if let Some(detection) = detection
                 && !is_collection_root
             {
+                let game_root = resolve_nwjs_package_root(&detection.engine_id, &directory);
                 if let Some(entry_path) = self
                     .registry
-                    .resolve_entry(&detection.engine_id, &directory)
+                    .resolve_entry(&detection.engine_id, &game_root)
                 {
-                    candidates.push(directory.clone());
+                    candidates.push(game_root.clone());
                     entry_candidates.push(ScanCandidate {
-                        game_root: directory.clone(),
+                        game_root,
                         entry_path,
                         engine_id: detection.engine_id,
                     });
@@ -144,6 +145,30 @@ impl ScanPlanner {
             scanned_directories,
         })
     }
+}
+
+pub(crate) fn resolve_nwjs_package_root(engine_id: &str, path: &Path) -> PathBuf {
+    if !engine_id.starts_with("rpgmaker") {
+        return path.to_path_buf();
+    }
+    let mut current = if path.is_file() {
+        path.parent().unwrap_or(path)
+    } else {
+        path
+    };
+    loop {
+        if current.join("package.json").is_file() {
+            return current.to_path_buf();
+        }
+        let Some(parent) = current.parent() else {
+            break;
+        };
+        if parent == current {
+            break;
+        }
+        current = parent;
+    }
+    path.to_path_buf()
 }
 
 /// Returns whether the scan root is a collection directory rather than a

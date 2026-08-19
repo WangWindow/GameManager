@@ -102,6 +102,32 @@ fn nwjs_plan_uses_user_and_crash_directories() -> gamemanager_core::Result<()> {
             .iter()
             .any(|arg| arg.to_string_lossy().starts_with("--crash-dumps-dir="))
     );
+    assert!(
+        plan.args
+            .iter()
+            .any(|arg| arg.to_string_lossy().starts_with("--url=file://"))
+    );
+    Ok(())
+}
+
+#[test]
+fn nwjs_plan_accepts_a_package_directory_and_profile_args() -> gamemanager_core::Result<()> {
+    let fixture = Fixture::new()?;
+    fs::write(
+        fixture.html_game_root().join("package.json"),
+        br#"{"main":"index.html"}"#,
+    )?;
+    let mut config = fixture.nwjs_config();
+    config.entry_path = ".".to_owned();
+    config.args = vec!["--enable-webgl".to_owned()];
+
+    let plan = fixture.launcher.plan(&fixture.html_game, &config)?;
+
+    assert!(plan.args.iter().any(|arg| arg == "--enable-webgl"));
+    assert_eq!(
+        plan.args.last().map(PathBuf::from),
+        Some(fixture.html_game_root())
+    );
     Ok(())
 }
 
@@ -253,6 +279,9 @@ args_template = "--game {exe}"
 
     fn profile_dir(&self) -> PathBuf {
         self.root.path().join("containers/profiles").join("vx")
+    }
+    fn html_game_root(&self) -> PathBuf {
+        self.root.path().join("games/html")
     }
     fn native_config(&self) -> GameConfig {
         config("other", "game", Runner::Native, false)

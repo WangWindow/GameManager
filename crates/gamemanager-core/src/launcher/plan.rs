@@ -181,20 +181,10 @@ impl Launcher {
         let program = find_runtime_binary(runtime, &["nw", "nwjs", "nw.exe", "nwjs.exe"])?;
         let entry = self.resolve_entry(root, &config.entry_path)?;
         let app = entry.as_deref().map_or_else(
-            || root.to_path_buf(),
-            |path| {
-                if path.is_file()
-                    && path.extension().is_some_and(|extension| {
-                        extension.eq_ignore_ascii_case("html")
-                            || extension.eq_ignore_ascii_case("htm")
-                    })
-                {
-                    path.parent().unwrap_or(root).to_path_buf()
-                } else {
-                    path.to_path_buf()
-                }
-            },
-        );
+            || Ok(root.to_path_buf()),
+            |path| resolve_nwjs_app(path, root),
+        )?;
+        let app_arg = nwjs_app_arg(&app);
         let mut args = config.args.iter().map(OsString::from).collect::<Vec<_>>();
         if config.sandbox_home {
             let user_data = self.user_data_dir(&game.profile_key)?;
@@ -218,10 +208,10 @@ impl Launcher {
                 OsString::from("BREAKPAD_DUMP_LOCATION"),
                 crash.into_os_string(),
             );
-            plan.args.push(app.into_os_string());
+            plan.args.push(app_arg);
             return Ok(plan);
         }
-        args.push(app.into_os_string());
+        args.push(app_arg);
         Ok(LaunchPlan {
             program,
             args,
@@ -360,10 +350,8 @@ impl Launcher {
         } else {
             root.join(path)
         };
-        if candidate.is_file() {
-            Ok(Some(
-                std::fs::canonicalize(candidate).unwrap_or_else(|_| PathBuf::from(entry)),
-            ))
+        if candidate.is_file() || candidate.is_dir() {
+            Ok(Some(std::fs::canonicalize(&candidate).unwrap_or(candidate)))
         } else {
             Err(CoreError::InvalidPath(format!(
                 "entry does not exist: {}",
@@ -393,6 +381,49 @@ impl Launcher {
         let path = self.profile_dir(profile_key).join("Crash Reports");
         std::fs::create_dir_all(&path)?;
         Ok(path)
+    }
+}
+
+fn is_html_path(path: &Path) -> bool {
+    path.extension().is_some_and(|extension| {
+        extension.eq_ignore_ascii_case("html") || extension.eq_ignore_ascii_case("htm")
+    })
+}
+
+fn resolve_nwjs_app(path: &Path, root: &Path) -> Result<PathBuf> {
+    if path.is_dir() {
+        return Ok(path.to_path_buf());
+    }
+    if path.file_name().is_some_and(|name| name == "package.json") {
+        return Ok(path.parent().unwrap_or(root).to_path_buf());
+    }
+    if !is_html_path(path) {
+        return Err(CoreError::InvalidPath(format!(
+            "NW.js entry must be a package directory or HTML file: {}",
+            path.display()
+        )));
+    }
+    let mut current = path.parent().unwrap_or(root);
+    loop {
+        if current.join("package.json").is_file() {
+            return Ok(current.to_path_buf());
+        }
+        let Some(parent) = current.parent() else {
+            break;
+        };
+        if parent == current {
+            break;
+        }
+        current = parent;
+    }
+    Ok(path.to_path_buf())
+}
+
+fn nwjs_app_arg(app: &Path) -> OsString {
+    if is_html_path(app) {
+        OsString::from(format!("--url=file://{}", app.display()))
+    } else {
+        app.to_path_buf().into_os_string()
     }
 }
 

@@ -71,6 +71,10 @@ impl CoverResolver {
     ) -> Result<Option<PathBuf>> {
         self.profiles.ensure(profile_key)?;
 
+        if let Some(icon) = package_icon(game_root) {
+            return self.copy_image(profile_key, &icon).map(Some);
+        }
+
         if let Some(entry) = entry.filter(|path| path.is_file()) {
             if let Some(asset) = self.icon_source.extract(entry)? {
                 return self.save_icon(profile_key, asset).map(Some);
@@ -157,6 +161,17 @@ impl CoverResolver {
             .map(ToOwned::to_owned);
         self.profiles.save(profile_key, &config)
     }
+}
+
+fn package_icon(game_root: &Path) -> Option<PathBuf> {
+    let package = std::fs::read_to_string(game_root.join("package.json")).ok()?;
+    let manifest: serde_json::Value = serde_json::from_str(&package).ok()?;
+    let icon = manifest.get("icon")?.as_str()?.trim();
+    if icon.is_empty() {
+        return None;
+    }
+    let path = game_root.join(icon);
+    path.is_file().then_some(path)
 }
 
 fn ico_to_png(bytes: &[u8]) -> Option<(Vec<u8>, &'static str)> {

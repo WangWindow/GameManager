@@ -12,7 +12,7 @@ use crate::{
     GameSummary, ProfileStore, Result, Runner,
 };
 
-use super::scan::is_nwjs_runtime_dir;
+use super::scan::{is_nwjs_runtime_dir, resolve_nwjs_package_root};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EntryPoint {
@@ -122,13 +122,27 @@ impl GameLibraryService {
     pub async fn import_game(&self, request: ImportRequest) -> Result<GameSummary> {
         debug!(entry = %request.entry.path.display(), "resolving import entry");
         let entry = canonical_entry(&request.entry.path)?;
-        let game_root = if entry.is_file() {
+        let detected_root = if entry.is_file() {
             entry
                 .parent()
                 .ok_or_else(|| CoreError::InvalidPath(entry.display().to_string()))?
                 .to_path_buf()
         } else {
             entry.clone()
+        };
+        let detection = self
+            .registry
+            .detect(&FsDetectionContext::new(detected_root.clone()));
+        let engine_id = request
+            .engine_id
+            .clone()
+            .or_else(|| detection.as_ref().map(|match_| match_.engine_id.clone()))
+            .unwrap_or_else(|| "other".to_owned());
+        let game_root = resolve_nwjs_package_root(&engine_id, &detected_root);
+        let entry = if game_root != detected_root {
+            game_root.clone()
+        } else {
+            entry
         };
         if is_nwjs_runtime_dir(&game_root) {
             return Err(CoreError::InvalidPath(format!(
@@ -149,14 +163,6 @@ impl GameLibraryService {
             )));
         }
 
-        let detection = self
-            .registry
-            .detect(&FsDetectionContext::new(game_root.clone()));
-        let engine_id = request
-            .engine_id
-            .clone()
-            .or_else(|| detection.as_ref().map(|match_| match_.engine_id.clone()))
-            .unwrap_or_else(|| "other".to_owned());
         info!(
             root = %game_root.display(),
             entry = %entry.display(),
@@ -436,6 +442,9 @@ fn default_config(registry: &EngineRegistry, engine_id: &str, entry: &Path) -> G
         sandbox_home: profile.is_none_or(|profile| profile.launch.sandbox_home),
         ..GameConfig::default()
     };
+    if let Some(profile) = profile {
+        config.args = profile.launch.args.clone();
+    }
     if config.runner == Runner::Native {
         config.sandbox_home = true;
     }

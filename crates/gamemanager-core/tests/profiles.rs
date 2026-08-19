@@ -107,6 +107,34 @@ fn extracted_icon_is_preferred_before_sidecar_and_directory_images() -> Result<(
 }
 
 #[test]
+fn package_icon_is_preferred_before_other_cover_candidates() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let game_root = root.path().join("game");
+    let profile_root = root.path().join("containers");
+    fs::create_dir_all(game_root.join("icons"))?;
+    fs::write(
+        game_root.join("package.json"),
+        br#"{"main":"index.html","icon":"assets/game-icon.png"}"#,
+    )?;
+    fs::create_dir_all(game_root.join("assets"))?;
+    let image = image::RgbaImage::from_pixel(1, 1, image::Rgba([16, 32, 48, 255]));
+    let mut image_bytes = Vec::new();
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(&mut Cursor::new(&mut image_bytes), image::ImageFormat::Png)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    fs::write(game_root.join("assets/game-icon.png"), image_bytes)?;
+    fs::write(game_root.join("cover.png"), b"fallback")?;
+
+    let profiles = ProfileStore::new(profile_root);
+    profiles.save("package-icon", &GameConfig::default())?;
+    let resolver = CoverResolver::with_icon_source(profiles, Arc::new(PngIconSource));
+    let result = resolver.refresh(&game_root, None, "package-icon")?;
+
+    assert!(result.expect("cover path").is_file());
+    Ok(())
+}
+
+#[test]
 fn custom_executable_cover_is_extracted_into_the_profile() -> Result<()> {
     let root = tempfile::tempdir()?;
     let executable = root.path().join("Game.exe");

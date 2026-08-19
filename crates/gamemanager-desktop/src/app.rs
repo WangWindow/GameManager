@@ -1212,11 +1212,11 @@ fn load_initial_window_size() -> iced::Size {
         return fallback;
     };
     match runtime.block_on(GameManagerCore::read_ui_preferences(&paths)) {
-        Ok(preferences) if preferences.remember_window_size => preferences
-            .window_size
-            .map_or(fallback, |[width, height]| {
+        Ok(preferences) if preferences.remember_window_size => {
+            preferences.window_size.map_or(fallback, |[width, height]| {
                 iced::Size::new(width as f32, height as f32)
-            }),
+            })
+        }
         _ => fallback,
     }
 }
