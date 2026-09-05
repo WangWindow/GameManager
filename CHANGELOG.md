@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.3] - 2026-09-05
+
+- chore(release): 0.10.3 (41fa63d)
+- fix(desktop): decouple startup from Bottles discovery (f2061e7)
+
+
 ## [0.10.2] - 2026-08-19
 
 - chore(release): 0.10.2 (c0c4391)
