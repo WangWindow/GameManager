@@ -2,7 +2,9 @@ use std::{
     ffi::OsString,
     io,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde_json::Value;
@@ -10,6 +12,8 @@ use serde_json::Value;
 use crate::{CoreError, Result};
 
 const FLATPAK_APP_ID: &str = "com.usebottles.bottles";
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(3);
+const COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BottlesCli {
@@ -55,22 +59,18 @@ pub struct SystemBottlesCliLocator;
 
 impl BottlesCliLocator for SystemBottlesCliLocator {
     fn locate(&self) -> Option<BottlesCli> {
-        if Command::new("flatpak")
-            .args(["info", FLATPAK_APP_ID])
-            .output()
-            .is_ok_and(|output| output.status.success())
-        {
+        let flatpak = BottlesCli::new("flatpak").with_prefix(["info", FLATPAK_APP_ID]);
+        if run_process(&flatpak, &[]).is_ok_and(|output| output.success) {
             return Some(BottlesCli::new("flatpak").with_prefix([
                 "run",
                 "--command=bottles-cli",
                 FLATPAK_APP_ID,
             ]));
         }
-        Command::new("bottles-cli")
-            .arg("--version")
-            .output()
-            .is_ok_and(|output| output.status.success())
-            .then(|| BottlesCli::new("bottles-cli"))
+        let bottles_cli = BottlesCli::new("bottles-cli");
+        run_process(&bottles_cli, &["--version"])
+            .is_ok_and(|output| output.success)
+            .then_some(bottles_cli)
     }
 }
 
@@ -78,15 +78,40 @@ struct ProcessBottlesCommandRunner;
 
 impl BottlesCommandRunner for ProcessBottlesCommandRunner {
     fn run(&self, cli: &BottlesCli, args: &[&str]) -> io::Result<BottlesCommandOutput> {
-        let output = Command::new(&cli.program)
-            .args(&cli.args_prefix)
-            .args(args)
-            .output()?;
-        Ok(BottlesCommandOutput {
-            success: output.status.success(),
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        })
+        run_process(cli, args)
+    }
+}
+
+fn run_process(cli: &BottlesCli, args: &[&str]) -> io::Result<BottlesCommandOutput> {
+    let mut child = Command::new(&cli.program)
+        .args(&cli.args_prefix)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let deadline = Instant::now() + COMMAND_TIMEOUT;
+
+    loop {
+        if child.try_wait()?.is_some() {
+            let output = child.wait_with_output()?;
+            return Ok(BottlesCommandOutput {
+                success: output.status.success(),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            });
+        }
+
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("{} command timed out", cli.program.display()),
+            ));
+        }
+
+        thread::sleep(COMMAND_POLL_INTERVAL);
     }
 }
 

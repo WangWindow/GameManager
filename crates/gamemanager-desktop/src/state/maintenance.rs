@@ -1,4 +1,4 @@
-use gamemanager_core::{OperationId, RuntimeStatus};
+use gamemanager_core::{IntegrationStatus, OperationId, RuntimeStatus};
 
 #[derive(Clone, Debug, Default)]
 pub struct MaintenanceState {
@@ -136,19 +136,26 @@ impl MaintenanceState {
         self.bottles_error = None;
     }
 
-    pub fn finish_bottle_refresh(&mut self, result: Result<Vec<String>, String>) {
+    pub fn finish_bottle_refresh(&mut self, result: Result<IntegrationStatus, String>) {
         self.bottles_loading = false;
         match result {
-            Ok(bottles) => {
-                self.bottles = bottles;
-                if self
-                    .bottles_default
-                    .as_ref()
-                    .is_some_and(|default| !self.bottles.iter().any(|bottle| bottle == default))
-                {
+            Ok(status) => {
+                self.bottles_available = status.available;
+                if status.available && status.bottles_error.is_none() {
+                    self.bottles = status.bottles;
+                    self.bottles_default = status.default_bottle;
+                    if self
+                        .bottles_default
+                        .as_ref()
+                        .is_some_and(|default| !self.bottles.iter().any(|bottle| bottle == default))
+                    {
+                        self.bottles_default = None;
+                    }
+                } else if !status.available {
+                    self.bottles.clear();
                     self.bottles_default = None;
                 }
-                self.bottles_error = None;
+                self.bottles_error = status.bottles_error;
             }
             Err(error) => self.bottles_error = Some(error),
         }

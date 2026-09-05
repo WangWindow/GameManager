@@ -104,7 +104,7 @@ pub enum Message {
     ToggleEngineExpanded(String),
     RefreshRuntimes,
     RefreshBottles,
-    BottlesRefreshed(Result<Vec<String>, String>),
+    BottlesRefreshed(Result<gamemanager_core::IntegrationStatus, String>),
     BottlesEnabledChanged(bool),
     BottlesIntegrationSaved(Result<(), String>),
     BottlesDefaultSelected(Option<String>),

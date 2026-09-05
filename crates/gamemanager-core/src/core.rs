@@ -129,14 +129,6 @@ impl GameManagerCore {
             .await?
             .is_some_and(|value| value == "true");
         let default_bottle = self.default_bottle().await?;
-        let (available, bottles, bottles_error) = match self.locate_bottles_cli().await {
-            Ok(Some(cli)) => match cli.list_bottles().await {
-                Ok(bottles) => (true, bottles, None),
-                Err(error) => (true, Vec::new(), Some(error.to_string())),
-            },
-            Ok(None) => (false, Vec::new(), None),
-            Err(error) => (false, Vec::new(), Some(error.to_string())),
-        };
         let runtimes = self
             .database
             .engines()
@@ -154,10 +146,10 @@ impl GameManagerCore {
             integrations: vec![IntegrationStatus {
                 id: "bottles".to_owned(),
                 enabled: bottles_enabled,
-                available,
-                bottles,
+                available: false,
+                bottles: Vec::new(),
                 default_bottle,
-                bottles_error,
+                bottles_error: None,
             }],
             runtimes,
         };
@@ -366,6 +358,32 @@ impl GameManagerCore {
         let bottles = cli.list_bottles().await?;
         info!(count = bottles.len(), "Bottles listed");
         Ok(bottles)
+    }
+
+    pub async fn bottles_status(&self) -> Result<IntegrationStatus> {
+        let enabled = self
+            .database
+            .setting(SETTING_BOTTLES_ENABLED)
+            .await?
+            .is_some_and(|value| value == "true");
+        let default_bottle = self.default_bottle().await?;
+        let (available, bottles, bottles_error) = match self.locate_bottles_cli().await {
+            Ok(Some(cli)) => match cli.list_bottles().await {
+                Ok(bottles) => (true, bottles, None),
+                Err(error) => (true, Vec::new(), Some(error.to_string())),
+            },
+            Ok(None) => (false, Vec::new(), None),
+            Err(error) => (false, Vec::new(), Some(error.to_string())),
+        };
+
+        Ok(IntegrationStatus {
+            id: "bottles".to_owned(),
+            enabled,
+            available,
+            bottles,
+            default_bottle,
+            bottles_error,
+        })
     }
 
     pub fn scan(&self, request: ScanRequest) -> Operation<ScanResult> {

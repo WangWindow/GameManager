@@ -1,10 +1,17 @@
-use gamemanager_core::{AppPaths, GameManagerCore, WindowBackend};
+use gamemanager_core::{AppPaths, GameManagerCore, UiPreferences, WindowBackend};
 use gamemanager_desktop::{DesktopApp, platform::DisplayBackendAvailability};
 
 fn main() -> iced::Result {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        run_with_window_backend(load_window_backend_preference())
+        let preferences = load_ui_preferences();
+        let backend = preferences
+            .as_ref()
+            .map_or(WindowBackend::Auto, |preferences| {
+                preferences.window_backend
+            });
+        let window_size = initial_window_size(preferences.as_ref());
+        run_with_window_backend(backend, window_size)
     }
 
     #[cfg(not(all(unix, not(target_os = "macos"))))]
@@ -14,28 +21,42 @@ fn main() -> iced::Result {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn load_window_backend_preference() -> WindowBackend {
+fn load_ui_preferences() -> Option<UiPreferences> {
     let Ok(paths) = AppPaths::discover() else {
-        return WindowBackend::Auto;
+        return None;
     };
     let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     else {
-        return WindowBackend::Auto;
+        return None;
     };
 
     match runtime.block_on(GameManagerCore::read_ui_preferences(&paths)) {
-        Ok(preferences) => preferences.window_backend,
+        Ok(preferences) => Some(preferences),
         Err(error) => {
-            eprintln!("GameManager: unable to read window backend preference: {error}");
-            WindowBackend::Auto
+            eprintln!("GameManager: unable to read UI preferences: {error}");
+            None
         }
     }
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn run_with_window_backend(requested: WindowBackend) -> iced::Result {
+fn initial_window_size(preferences: Option<&UiPreferences>) -> iced::Size {
+    let fallback = iced::window::Settings::default().size;
+    preferences
+        .filter(|preferences| preferences.remember_window_size)
+        .and_then(|preferences| preferences.window_size)
+        .map_or(fallback, |[width, height]| {
+            iced::Size::new(width as f32, height as f32)
+        })
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn run_with_window_backend(
+    requested: WindowBackend,
+    initial_window_size: iced::Size,
+) -> iced::Result {
     let availability = DisplayBackendAvailability::detect();
     let backend = match availability.resolve(requested) {
         WindowBackend::Auto if DisplayBackendAvailability::wayland_endpoint_present() => {
@@ -62,7 +83,9 @@ fn run_with_window_backend(requested: WindowBackend) -> iced::Result {
         }
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(DesktopApp::run));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        DesktopApp::run_with_initial_window_size(initial_window_size)
+    }));
 
     match result {
         Ok(result) => {

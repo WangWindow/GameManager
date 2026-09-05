@@ -1,4 +1,4 @@
-use gamemanager_core::{EngineSummary, ThemeMode};
+use gamemanager_core::{EngineSummary, IntegrationStatus, ThemeMode};
 use gamemanager_desktop::state::{
     AppearanceDialogState, DialogState, EngineListState, EngineRow, MaintenanceState,
     PreferencesState, UtilityDialog,
@@ -130,8 +130,34 @@ fn bottle_refresh_preserves_the_last_successful_list_on_error() {
     assert!(state.bottles_loading());
     assert!(!state.can_select_bottles());
 
-    state.finish_bottle_refresh(Err("bottles-cli failed".to_owned()));
+    state.finish_bottle_refresh(Ok(IntegrationStatus {
+        id: "bottles".to_owned(),
+        enabled: true,
+        available: true,
+        bottles: Vec::new(),
+        default_bottle: None,
+        bottles_error: Some("bottles-cli failed".to_owned()),
+    }));
     assert_eq!(state.bottles(), ["Games"]);
     assert_eq!(state.bottles_error(), Some("bottles-cli failed"));
     assert!(state.can_select_bottles());
+}
+
+#[test]
+fn first_bottle_refresh_marks_the_integration_available() {
+    let mut state =
+        MaintenanceState::with_runtime_snapshot(Vec::new(), false, false, Vec::new(), None, None);
+
+    state.begin_bottle_refresh();
+    state.finish_bottle_refresh(Ok(IntegrationStatus {
+        id: "bottles".to_owned(),
+        enabled: false,
+        available: true,
+        bottles: vec!["Games".to_owned()],
+        default_bottle: None,
+        bottles_error: None,
+    }));
+
+    assert!(state.bottles_available());
+    assert_eq!(state.bottles(), ["Games"]);
 }

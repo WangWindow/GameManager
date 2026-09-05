@@ -61,6 +61,10 @@ impl DesktopApp {
     }
 
     pub fn run() -> iced::Result {
+        Self::run_with_initial_window_size(load_initial_window_size())
+    }
+
+    pub fn run_with_initial_window_size(initial_window_size: iced::Size) -> iced::Result {
         let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             tracing_subscriber::EnvFilter::new(
                 "gamemanager_core=info,gamemanager_desktop=info,warn",
@@ -86,7 +90,7 @@ impl DesktopApp {
             .window(window::Settings {
                 decorations: false,
                 resizable: true,
-                size: load_initial_window_size(),
+                size: initial_window_size,
                 ..window::Settings::default()
             });
         for font in iced_shadcn_v2::fonts::ALL_FACES {
@@ -231,7 +235,10 @@ impl DesktopApp {
             }
             Message::ToastDismissed => self.toast = None,
             Message::BootstrapFinished(result) => match result {
-                Ok((core, snapshot)) => self.apply_bootstrap_snapshot(core, snapshot),
+                Ok((core, snapshot)) => {
+                    self.apply_bootstrap_snapshot(core, snapshot);
+                    return self.refresh_bottles_task();
+                }
                 Err(error) => {
                     self.maintenance
                         .finish_runtime_operation(Err(error.clone()));
@@ -753,7 +760,9 @@ impl DesktopApp {
                 match result {
                     Ok((core, snapshot)) => {
                         self.apply_bootstrap_snapshot(core, snapshot);
-                        return self.show_toast("容器根目录已更新");
+                        let bottles = self.refresh_bottles_task();
+                        let toast = self.show_toast("容器根目录已更新");
+                        return Task::batch([bottles, toast]);
                     }
                     Err(error) => self.dialogs.appearance.error = Some(error),
                 }
@@ -1156,7 +1165,11 @@ impl DesktopApp {
         };
         self.maintenance.begin_bottle_refresh();
         Task::perform(
-            async move { core.list_bottles().await.map_err(|error| error.to_string()) },
+            async move {
+                core.bottles_status()
+                    .await
+                    .map_err(|error| error.to_string())
+            },
             Message::BottlesRefreshed,
         )
     }
@@ -1222,6 +1235,10 @@ fn load_initial_window_size() -> iced::Size {
 }
 
 fn window_task(action: WindowAction) -> Task<Message> {
+    if matches!(action, WindowAction::Close) {
+        return iced::exit();
+    }
+
     window::latest().then(move |id| {
         let Some(id) = id else {
             return Task::none();
@@ -1231,7 +1248,7 @@ fn window_task(action: WindowAction) -> Task<Message> {
             WindowAction::Resize(direction) => window::drag_resize(id, direction),
             WindowAction::Minimize => window::minimize(id, true),
             WindowAction::ToggleMaximize => window::toggle_maximize(id),
-            WindowAction::Close => window::close(id),
+            WindowAction::Close => unreachable!("close is handled before window lookup"),
         }
     })
 }
