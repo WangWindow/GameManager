@@ -973,9 +973,8 @@ impl DesktopApp {
                 background: Some(iced::Background::Color(theme.palette.background)),
                 text_color: Some(theme.palette.foreground),
                 border: iced::Border {
-                    color: theme.palette.border,
-                    width: UiTokens::WINDOW_BORDER,
                     radius: UiTokens::WINDOW_RADIUS.into(),
+                    ..Default::default()
                 },
                 ..Default::default()
             })
