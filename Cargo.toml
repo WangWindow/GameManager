@@ -18,7 +18,11 @@ glob = "0.3"
 infer = "0.22"
 icoextract_rs = "0.1.2"
 iced = { version = "0.14", features = ["tokio", "image-without-codecs", "svg"] }
-iced-shadcn-v2 = { git = "https://github.com/FerrisMind/shadcn-rs.git", rev = "570ee5dc6fec6b16680fcdfd56c4aa570d24d091", default-features = false, features = [
+iced-shadcn-v2 = { git = "https://github.com/FerrisMind/shadcn-rs.git", rev = "96982c1c2a3c567d4ee847b72521711556fd98c1", default-features = false, features = [
+    "core",
+    "fonts",
+    "forms",
+    "overlays",
     "wgpu",
 ] }
 image = { version = "0.25", default-features = false, features = [
@@ -36,6 +40,7 @@ rfd = { version = "0.17", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 tar = "0.4"
 thiserror = "2"
 toasty = { version = "0.10", features = ["sqlite"] }
