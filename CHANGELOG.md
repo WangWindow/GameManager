@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.4] - 2026-10-20
+
+- chore(release): 0.10.4 (5a180c7)
+- fix(desktop): refresh Bottles when opening game settings (8122ebd)
+- fix(bottles): read bottle catalog from disk (158d02c)
+- chore(deps): update iced-shadcn-v2 and add serde_yaml (0c5d49a)
+- fix: fix window border style (23a14f2)
+
+
 ## [0.10.3] - 2026-09-05
 
 - chore(release): 0.10.3 (41fa63d)
