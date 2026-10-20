@@ -10,12 +10,13 @@ use serde::de::DeserializeOwned;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    AppPaths, AppSettings, BottlesCli, BottlesCliLocator, CoreError, Database, EngineDetail,
-    EngineRecord, EngineRegistry, EngineSummary, GameConfig, GameLibraryService, GameSummary,
-    ImportRequest, Launcher, MkxpzInstallResult, NwjsInstallResult, Operation, ProfileStore,
-    RegistryWarning, Result, RuntimeManager, SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED,
-    SETTING_CONTAINER_ROOT, SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ScanPlanner,
-    ScanRequest, ScanResult, SystemBottlesCliLocator, UiPreferences,
+    AppPaths, AppSettings, BottleCatalog, BottleCatalogReport, BottlesCli, BottlesCliLocator,
+    CoreError, Database, EngineDetail, EngineRecord, EngineRegistry, EngineSummary, GameConfig,
+    GameLibraryService, GameSummary, ImportRequest, Launcher, MkxpzInstallResult,
+    NwjsInstallResult, Operation, ProfileStore, RegistryWarning, Result, RuntimeManager,
+    SETTING_BOTTLES_DEFAULT, SETTING_BOTTLES_ENABLED, SETTING_CONTAINER_ROOT,
+    SETTING_ENGINE_ENABLED, SETTING_UI_PREFERENCES, ScanPlanner, ScanRequest, ScanResult,
+    SystemBottleCatalog, SystemBottlesCliLocator, UiPreferences,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,6 +60,8 @@ pub struct GameManagerCore {
     runtime: RuntimeManager,
     container_root: PathBuf,
     bottles_locator: Arc<dyn BottlesCliLocator>,
+    bottles_catalog: Arc<dyn BottleCatalog>,
+    bottles_cli: tokio::sync::RwLock<Option<BottlesCli>>,
 }
 
 impl GameManagerCore {
@@ -69,6 +72,19 @@ impl GameManagerCore {
     pub async fn open_with_bottles_locator(
         paths: AppPaths,
         bottles_locator: Arc<dyn BottlesCliLocator>,
+    ) -> Result<Self> {
+        Self::open_with_bottles_services(
+            paths,
+            bottles_locator,
+            Arc::new(SystemBottleCatalog::discover()),
+        )
+        .await
+    }
+
+    pub async fn open_with_bottles_services(
+        paths: AppPaths,
+        bottles_locator: Arc<dyn BottlesCliLocator>,
+        bottles_catalog: Arc<dyn BottleCatalog>,
     ) -> Result<Self> {
         info!(
             data_dir = %paths.data_dir().display(),
@@ -113,6 +129,8 @@ impl GameManagerCore {
             runtime,
             container_root,
             bottles_locator,
+            bottles_catalog,
+            bottles_cli: tokio::sync::RwLock::new(None),
         };
         info!("core opened");
         Ok(core)
@@ -239,7 +257,7 @@ impl GameManagerCore {
                 .setting(SETTING_BOTTLES_ENABLED)
                 .await?
                 .is_some_and(|value| value == "true")
-            && let Some(cli) = self.bottles_locator.locate()
+            && let Some(cli) = self.locate_bottles_cli().await?
         {
             launcher = launcher.with_bottles_cli(cli);
         }
@@ -367,13 +385,24 @@ impl GameManagerCore {
             .await?
             .is_some_and(|value| value == "true");
         let default_bottle = self.default_bottle().await?;
-        let (available, bottles, bottles_error) = match self.locate_bottles_cli().await {
-            Ok(Some(cli)) => match cli.list_bottles().await {
-                Ok(bottles) => (true, bottles, None),
-                Err(error) => (true, Vec::new(), Some(error.to_string())),
-            },
-            Ok(None) => (false, Vec::new(), None),
-            Err(error) => (false, Vec::new(), Some(error.to_string())),
+        let catalog = self.bottles_catalog.list();
+        self.log_catalog_warnings(&catalog);
+
+        let (available, bottles, bottles_error) = if catalog.definitive {
+            // The on-disk catalog is authoritative and takes milliseconds.
+            // Do not invoke the CLI just to enumerate bottles: starting the
+            // Flatpak/Python stack costs several seconds and used to trip the
+            // command timeout even when Bottles was healthy.
+            (true, catalog.bottles, None)
+        } else {
+            match self.locate_bottles_cli().await {
+                Ok(Some(cli)) => match cli.list_bottles().await {
+                    Ok(bottles) => (true, bottles, None),
+                    Err(error) => (true, Vec::new(), Some(error.to_string())),
+                },
+                Ok(None) => (false, Vec::new(), None),
+                Err(error) => (false, Vec::new(), Some(error.to_string())),
+            }
         };
 
         Ok(IntegrationStatus {
@@ -384,6 +413,12 @@ impl GameManagerCore {
             default_bottle,
             bottles_error,
         })
+    }
+
+    fn log_catalog_warnings(&self, catalog: &BottleCatalogReport) {
+        for warning in &catalog.warnings {
+            warn!(warning, "Bottles catalog scan warning");
+        }
     }
 
     pub fn scan(&self, request: ScanRequest) -> Operation<ScanResult> {
@@ -467,7 +502,12 @@ impl GameManagerCore {
         self.database
             .set_setting(SETTING_CONTAINER_ROOT, &path.to_string_lossy())
             .await?;
-        Self::open_with_bottles_locator(self.paths.clone(), Arc::clone(&self.bottles_locator)).await
+        Self::open_with_bottles_services(
+            self.paths.clone(),
+            Arc::clone(&self.bottles_locator),
+            Arc::clone(&self.bottles_catalog),
+        )
+        .await
     }
 
     pub async fn ui_preferences(&self) -> Result<UiPreferences> {
@@ -567,14 +607,22 @@ impl GameManagerCore {
     }
 
     async fn locate_bottles_cli(&self) -> Result<Option<BottlesCli>> {
+        if let Some(cli) = self.bottles_cli.read().await.clone() {
+            return Ok(Some(cli));
+        }
+
         let locator = Arc::clone(&self.bottles_locator);
-        tokio::task::spawn_blocking(move || locator.locate())
+        let cli = tokio::task::spawn_blocking(move || locator.locate())
             .await
             .map_err(|error| {
                 CoreError::Configuration(format!(
                     "Bottles detection task could not complete: {error}"
                 ))
-            })
+            })?;
+        if let Some(cli) = &cli {
+            *self.bottles_cli.write().await = Some(cli.clone());
+        }
+        Ok(cli)
     }
 }
 

@@ -29,8 +29,8 @@ pub use game_library::{
     ScanRequest, ScanResult, UpdateGameRequest,
 };
 pub use integrations::{
-    BottlesCli, BottlesCliLocator, BottlesCommandOutput, BottlesCommandRunner,
-    SystemBottlesCliLocator,
+    BottleCatalog, BottleCatalogReport, BottlesCli, BottlesCliLocator, BottlesCommandOutput,
+    BottlesCommandRunner, SystemBottleCatalog, SystemBottlesCliLocator,
 };
 pub use launcher::{LaunchPlan, LaunchResult, Launcher};
 pub use models::{

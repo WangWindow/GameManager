@@ -5,7 +5,10 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use gamemanager_core::{BottlesCli, BottlesCliLocator, GameManagerCore, Result, UiPreferences};
+use gamemanager_core::{
+    BottleCatalog, BottleCatalogReport, BottlesCli, BottlesCliLocator, GameManagerCore, Result,
+    UiPreferences,
+};
 
 struct NoBottles;
 
@@ -23,6 +26,14 @@ impl BottlesCliLocator for CountingBottles {
     fn locate(&self) -> Option<BottlesCli> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         None
+    }
+}
+
+struct FixedCatalog(BottleCatalogReport);
+
+impl BottleCatalog for FixedCatalog {
+    fn list(&self) -> BottleCatalogReport {
+        self.0.clone()
     }
 }
 
@@ -66,6 +77,57 @@ async fn bootstrap_does_not_probe_bottles_before_the_app_is_ready() -> Result<()
         .find(|integration| integration.id == "bottles")
         .expect("Bottles integration");
     assert!(!bottles.available);
+    Ok(())
+}
+
+#[tokio::test]
+async fn bottles_status_uses_the_filesystem_catalog_without_probing_the_cli() -> Result<()> {
+    let installation = test_storage::create_existing_v09_layout().await?;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let core = GameManagerCore::open_with_bottles_services(
+        installation.paths,
+        Arc::new(CountingBottles {
+            calls: Arc::clone(&calls),
+        }),
+        Arc::new(FixedCatalog(BottleCatalogReport {
+            bottles: vec!["Games".to_owned(), "Wines".to_owned()],
+            definitive: true,
+            warnings: Vec::new(),
+        })),
+    )
+    .await?;
+
+    let status = core.bottles_status().await?;
+
+    assert!(status.available);
+    assert_eq!(status.bottles, ["Games", "Wines"]);
+    assert!(status.bottles_error.is_none());
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn bottles_status_falls_back_to_the_cli_when_no_catalog_is_found() -> Result<()> {
+    let installation = test_storage::create_existing_v09_layout().await?;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let core = GameManagerCore::open_with_bottles_services(
+        installation.paths,
+        Arc::new(CountingBottles {
+            calls: Arc::clone(&calls),
+        }),
+        Arc::new(FixedCatalog(BottleCatalogReport {
+            bottles: Vec::new(),
+            definitive: false,
+            warnings: Vec::new(),
+        })),
+    )
+    .await?;
+
+    let status = core.bottles_status().await?;
+
+    assert!(!status.available);
+    assert!(status.bottles.is_empty());
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
     Ok(())
 }
 

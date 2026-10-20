@@ -12,7 +12,7 @@ use serde_json::Value;
 use crate::{CoreError, Result};
 
 const FLATPAK_APP_ID: &str = "com.usebottles.bottles";
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(3);
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 const COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -133,8 +133,12 @@ impl BottlesCli {
     }
 
     pub fn list_bottles_with(&self, runner: &dyn BottlesCommandRunner) -> Result<Vec<String>> {
-        let json = runner.run(self, &["--json", "list", "bottles"])?;
-        if json.success {
+        // A timeout or spawn failure must not prevent the text fallback: some
+        // Bottles versions take several seconds to boot the Flatpak/Python
+        // stack before they can answer the JSON query.
+        if let Ok(json) = runner.run(self, &["--json", "list", "bottles"])
+            && json.success
+        {
             let bottles = parse_bottles_json(&json.stdout);
             if !bottles.is_empty() {
                 return Ok(bottles);
@@ -184,12 +188,26 @@ fn parse_bottles_json(raw: &str) -> Vec<String> {
     let Ok(value) = serde_json::from_str::<Value>(raw) else {
         return Vec::new();
     };
-    let values = value
-        .as_array()
-        .or_else(|| value.get("bottles").and_then(Value::as_array));
-    values.map_or_else(Vec::new, |values| {
-        deduplicate_bottle_names(values.iter().filter_map(extract_bottle_name))
-    })
+
+    if let Some(values) = value.as_array() {
+        return deduplicate_bottle_names(values.iter().filter_map(extract_bottle_name));
+    }
+
+    if let Some(values) = value.get("bottles").and_then(Value::as_array) {
+        return deduplicate_bottle_names(values.iter().filter_map(extract_bottle_name));
+    }
+
+    // Classic Bottles serializes `Manager.local_bottles` directly, which is a
+    // map keyed by bottle name: {"Games": {...bottle config...}}.
+    if let Some(object) = value.as_object() {
+        return deduplicate_bottle_names(
+            object
+                .keys()
+                .filter_map(|name| normalized_bottle_name(name)),
+        );
+    }
+
+    Vec::new()
 }
 
 fn extract_bottle_name(value: &Value) -> Option<String> {

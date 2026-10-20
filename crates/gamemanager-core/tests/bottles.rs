@@ -44,3 +44,32 @@ fn failed_json_falls_back_to_bulleted_text_without_invoking_bottles() -> Result<
     assert_eq!(cli.list_bottles_with(&runner)?, ["Games", "Testing"]);
     Ok(())
 }
+
+#[test]
+fn classic_top_level_object_form_uses_bottle_names_as_keys() -> Result<()> {
+    let cli = BottlesCli::new("bottles-cli");
+    let runner = FakeRunner(vec![BottlesCommandOutput::success(
+        r#"{"Games":{"Name":"Games","Path":"Games"},"Wines":{"Name":"Wines"}}"#,
+    )]);
+
+    assert_eq!(cli.list_bottles_with(&runner)?, ["Games", "Wines"]);
+    Ok(())
+}
+
+#[test]
+fn json_timeout_falls_back_to_text() -> Result<()> {
+    struct TimeoutThenText;
+
+    impl BottlesCommandRunner for TimeoutThenText {
+        fn run(&self, _cli: &BottlesCli, args: &[&str]) -> io::Result<BottlesCommandOutput> {
+            if args == ["--json", "list", "bottles"] {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "timed out"));
+            }
+            Ok(BottlesCommandOutput::success("Found 1 bottles:\n- Games\n"))
+        }
+    }
+
+    let cli = BottlesCli::new("bottles-cli");
+    assert_eq!(cli.list_bottles_with(&TimeoutThenText)?, ["Games"]);
+    Ok(())
+}
