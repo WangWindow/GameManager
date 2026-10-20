@@ -397,7 +397,7 @@ impl DesktopApp {
                 else {
                     return Task::none();
                 };
-                return Task::perform(
+                let load = Task::perform(
                     async move {
                         let config = core
                             .game_config(&game.profile_key)
@@ -407,6 +407,11 @@ impl DesktopApp {
                     },
                     Message::GameSettingsLoaded,
                 );
+                // The Bottles catalog is cheap to scan, so refresh it when the
+                // dialog opens. This picks up bottles created after startup
+                // without blocking the UI thread.
+                let refresh = self.refresh_bottles_task();
+                return Task::batch([load, refresh]);
             }
             Message::CloseGameSettings => self.dialogs.settings = None,
             Message::CloseDeleteGame => self.dialogs.delete = None,
@@ -1157,6 +1162,9 @@ impl DesktopApp {
     }
 
     fn refresh_bottles_task(&mut self) -> Task<Message> {
+        if self.maintenance.bottles_loading() {
+            return Task::none();
+        }
         let Some(core) = self.core.clone() else {
             self.maintenance
                 .finish_bottle_refresh(Err("应用尚未完成初始化".to_owned()));
